@@ -104,7 +104,7 @@ data = {
     "zone_id": zone_id  # Security zone ID to associate
 } 
 # a sample ,taken from Chrome dev explorer 
-data = {"zone_id":"1741070616931015345","lannetwork_ids":[],"interface_ids":["1738842938780010445"],"wanoverlay_ids":[],"waninterface_ids":[]}
+data = {"zone_id":"x","lannetwork_ids":[],"interface_ids":["y"],"wanoverlay_ids":[],"waninterface_ids":[]}
 # Create the association between element and security zone
 response = sdk.post.elementsecurityzones(site_id, element_id, data)
 
