@@ -1,0 +1,125 @@
+#Author: Vladimir Franca de Sousa
+#Sample script posted not as an Palo Alto Network employee - Use at your own risk!
+
+import http.client
+import json
+import requests
+import os
+
+# Constants
+AUTH_URL = "https://auth.apps.paloaltonetworks.com/oauth2/access_token"
+BASE_API_URL = "https://api.sase.paloaltonetworks.com"
+
+
+def get_env_variable(name):
+    """Retrieve environment variable or raise an error if not found."""
+    value = os.getenv(name)
+    if not value:
+        raise ValueError(f"Environment variable {name} is not set")
+    return value
+
+
+def get_token():
+    """Retrieve OAuth2 token using client credentials."""
+    try:
+        client_id = get_env_variable("CLIENT_ID")
+        client_secret = get_env_variable("CLIENT_SECRET")
+        tenant_id = get_env_variable("TENANT_ID")
+        scope = f"tsg_id:{tenant_id}"
+        grant_type = "client_credentials"
+
+        data_payload = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "scope": scope,
+            "grant_type": grant_type
+        }
+
+        response = requests.post(
+            AUTH_URL,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            data=data_payload
+        )
+        response.raise_for_status()
+        token = response.json().get("access_token")
+        if not token:
+            raise ValueError("Token not found in the response")
+        return token
+    except requests.RequestException as e:
+        print(f"Error retrieving token: {e}")
+        return None
+    except ValueError as e:
+        print(e)
+        return None
+
+
+def make_api_call(endpoint, token, method="GET", params=None, data=None):
+    """Make a request to the specified API endpoint with the given HTTP method."""
+    try:
+        headers = {
+            "Accept": "application/json",
+            "Authorization": f"Bearer {token}"
+        }
+
+        url = f"{BASE_API_URL}{endpoint}"
+
+        if method == "GET":
+            response = requests.get(url, headers=headers, params=params)
+        elif method == "POST":
+            response = requests.post(url, headers=headers, params=params, json=data)
+        elif method == "PUT":
+            response = requests.put(url, headers=headers, params=params, json=data)
+        elif method == "DEL":
+            response = requests.delete(url, headers=headers, params=params, json=data)
+
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"Error during API call to {endpoint}: {e}")
+        return None
+
+
+print("Retrieving token...")
+token = get_token()
+if not token:
+    print("Failed to retrieve the token. Exiting.")
+    exit()
+print("Token retrieved successfully!")
+
+# --- Enable SD-WAN API Access ---
+endpoint = '/sdwan/v2.1/api/profile'
+make_api_call(endpoint, token, method="GET", params=None, data=None)
+
+
+# --- Iterate Through All Elements  ---
+
+elements_endpoint='/sdwan/v3.2/api/elements'
+elements_response = make_api_call(elements_endpoint, token, method="GET")
+#print(f"Elements {elements_response}")
+# --- Iterate Through Elements and Get Status ---
+
+if elements_response is not None:
+    elements = elements_response.get("items", [])
+    for element in elements:
+        site_id = element.get("site_id")
+        element_id = element.get("id")
+        element_name = element.get("name")
+        print(f"--- Processing Devices: {element_name} ({element_id}) ---")
+        if element_id is not None:
+            # --- Get Interfaces for the Current Element ---
+        
+            interfaces_endpoint = f"/sdwan/v4.20/api/sites/{site_id}/elements/{element_id}/interfaces"
+            interfaces_response = make_api_call(interfaces_endpoint, token, method="GET")
+            interfaces = interfaces_response.get("items", [])
+            
+            for interface in interfaces:
+                interface_id = interface.get("id")
+                interface_name = interface.get("name")
+                interface_admin_status = interface.get("admin_up")
+                print(f"Interfaces for Element {element_name} ({interface_id}): {interface_name}: {interface_admin_status}")
+                
+                interfaces_status_endpoint = f"/sdwan/v3.8/api/sites/{site_id}/elements/{element_id}/interfaces/{interface_id}/status"
+                response = make_api_call(interfaces_status_endpoint, token, method="GET")
+                operational_state = response.get('operational_state', 'Unknown')
+                #print(f"Operational State: {operational_state}")
+                print(f"Interface Status for Element {element_name} ({interface_id}): {interface_name}: {operational_state}")
