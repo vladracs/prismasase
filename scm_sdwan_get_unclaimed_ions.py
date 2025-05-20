@@ -44,10 +44,7 @@ def get_headers(token):
         'X-PANW-Region': 'de'
     }
 
- 
-
-
-if __name__ == '__main__':
+ if __name__ == '__main__':
     
     token = get_token()
     headers = get_headers(token)
@@ -68,14 +65,16 @@ if __name__ == '__main__':
     # Check for success
     if response.status_code == 200:
         elements = response.json().get("items", [])
-        print(f" {'Model Name':20} {'Image Version':15} {'Serial Number':36} {'State'}")
+        print(f" Device_ID           {'Model_Name':20} {'Image_Version':15} {'Serial_Number':36}        {'State'}")
         print("-" * 120)
         for elem in elements:
+            device_id = elem.get("id")
             model = elem.get("model_name", "N/A")
             version = elem.get("image_version", "N/A")
             serial = elem.get("sl_no", "N/A")
             role = elem.get("machine_state", "N/A")
-            print(f"{model:20} {version:15} {serial:36} {role}")
+            print(f"{device_id} {model:20} {version:15} {serial:36}        {role}")
     else:
         print(f"Failed to fetch ION devices. Status code: {response.status_code}")
         print(response.text)
+ 
