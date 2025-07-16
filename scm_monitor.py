@@ -35,7 +35,7 @@ def get_headers(token):
         'accept': 'application/json',
         'Authorization': f'Bearer {token}',
         'Content-Type': 'application/json',
-        'X-PANW-Region': 'de'
+        'x-panw-region': 'de'
 
     }
 
@@ -114,25 +114,27 @@ def call_aiops_health(token):
 def call_applicationsummary(token):
     applicationsummary_url = f"{BASE_API_URL}/sdwan/monitor/v2.0/api/monitor/applicationsummary/query"
 
-    applicationsummary_payload = json.dumps(
-     {
-        "start_time": "2025-07-01T00:00:00Z",
-        "end_time": "2025-07-02T00:00:00Z",
-        "interval": "10sec",
-        "view": "duration",
-        "filter": {
-            # These must be valid names/IDs known to your tenant
-            "app": ["1750746346793022945"],
-            "site": ["1741295428037016145"]
-        },
-        "metrics": ["ApplicationHealthscore"]
-    }   
-    )
+    applicationsummary_payload =  {
+    "start_time": "2025-07-15T06:00:00.000Z",
+    "end_time": "2025-07-16T13:00:00.000Z",
+    "interval": "5min",
+    "metrics": [
+        "ApplicationHealthscore"
+    ],
+    "filter": {
+        "app": [
+            "1682474676454001596"
+        ],
+        "site": [
+            "1741378371338024045"
+        ]
+    }
+     }
+  
 
-
-    #applicationsummary_url = f"{BASE_API_URL}/sdwan/monitor/v2.0/api/monitor/applicationsummary"
     headers = get_headers(token)
-    print("GET applicationsummary_url = ",applicationsummary_url)
+    
+    #print("GET applicationsummary_url = ",applicationsummary_url)
     resp = requests.post(applicationsummary_url, headers=headers, data=json.dumps(applicationsummary_payload))
     print("applicationsummary api status:", resp.status_code)
     print("applicationsummary api response:", resp.text)
@@ -162,16 +164,6 @@ def call_aggregatebandwidth(token):
     #print("aggregatebandwidth api response:", resp.text)
     return resp
 
-def call_interfacestatus(token):
-    interfacestatus_url = f"{BASE_API_URL}/sdwan/v2.0/api/interfaces/status/query"
-    headers = get_headers(token)
-    interface_status_payload = {}
-
-
-    resp = requests.get(interfacestatus_url, headers=headers)
-    print("interfacestatus api status:", resp.status_code)
-    print("interfacestatus api response:", resp.text)
-    return resp
 
 def get_all_interfaces_status(token):
     sites_url = f"{BASE_API_URL}/sdwan/v4.11/api/sites"
@@ -224,11 +216,10 @@ if __name__ == '__main__':
     tenant_id = get_env_variable("TENANT_ID")
     token = get_token()
     get_profile(token)
-    #call_alarms(token)
+    call_alarms(token)
     call_appdefs(token)
-    #call_aiops_health(token)
-    call_applicationsummary(token) ##still wrong payload -> TBD
-    #call_aggregatebandwidth(token)
-    #call_interfacestatus(token)
-    #get_all_interfaces_status(token)
+    call_aiops_health(token)
+    call_applicationsummary(token)
+    call_aggregatebandwidth(token)
+    get_all_interfaces_status(token)
 
