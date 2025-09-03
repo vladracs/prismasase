@@ -1,0 +1,594 @@
+{
+	"info": {
+		"_postman_id": "eea39a62-0ca3-450d-9c3d-b836ddf4c892",
+		"name": "Prisma-SASE-Collection",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "47352291"
+	},
+	"item": [
+		{
+			"name": "Prisma SDWAN",
+			"item": [
+				{
+					"name": "BasicGETs",
+					"item": [
+						{
+							"name": "Get-elements",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"var elementsResponse = pm.response.json();"
+										],
+										"type": "text/javascript",
+										"packages": {}
+									}
+								},
+								{
+									"listen": "prerequest",
+									"script": {
+										"exec": [
+											"try {",
+											"    const response = await pm.sendRequest({",
+											"        url: \"https://postman-echo.com/get\",",
+											"        method: \"GET\"",
+											"    });",
+											"",
+											"    console.log(response.json());",
+											"} catch (err) {",
+											"    console.error(err);",
+											"}"
+										],
+										"type": "text/javascript",
+										"packages": {}
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "https://api.sase.paloaltonetworks.com/sdwan/v3.2/api/elements",
+									"protocol": "https",
+									"host": [
+										"api",
+										"sase",
+										"paloaltonetworks",
+										"com"
+									],
+									"path": [
+										"sdwan",
+										"v3.2",
+										"api",
+										"elements"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Get-Sites",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "https://api.sase.paloaltonetworks.com/sdwan/v4.12/api/sites",
+									"protocol": "https",
+									"host": [
+										"api",
+										"sase",
+										"paloaltonetworks",
+										"com"
+									],
+									"path": [
+										"sdwan",
+										"v4.12",
+										"api",
+										"sites"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Get-Security-Zones",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "https://api.sase.paloaltonetworks.com/sdwan/v2.1/api/securityzones",
+									"protocol": "https",
+									"host": [
+										"api",
+										"sase",
+										"paloaltonetworks",
+										"com"
+									],
+									"path": [
+										"sdwan",
+										"v2.1",
+										"api",
+										"securityzones"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Get-Site-Element-SecurityZone",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "https://api.sase.paloaltonetworks.com/sdwan/v2.0/api/sites/1741295428037016145/elements/1741293965355008345/securityzones",
+									"protocol": "https",
+									"host": [
+										"api",
+										"sase",
+										"paloaltonetworks",
+										"com"
+									],
+									"path": [
+										"sdwan",
+										"v2.0",
+										"api",
+										"sites",
+										"1741295428037016145",
+										"elements",
+										"1741293965355008345",
+										"securityzones"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Get-Site-Element-SecurityZone-ZoneBindings",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"var jsonData = pm.response.json();",
+											"pm.globals.set(\"etag\", jsonData._etag);",
+											"console.log(pm.globals.get(\"etag\"));",
+											"pm.test(\"Print Global Variable\", function () {",
+											"    let myVar = pm.globals.get(\"etag\");",
+											"    console.log(\"etag:\", myVar);",
+											"    pm.expect(myVar).to.not.be.null;  // Simple check to ensure the variable exists",
+											"});"
+										],
+										"type": "text/javascript",
+										"packages": {}
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "https://api.sase.paloaltonetworks.com/sdwan/v2.0/api/sites/1741295428037016145/elements/1741293965355008345/securityzones/1741701350095013145",
+									"protocol": "https",
+									"host": [
+										"api",
+										"sase",
+										"paloaltonetworks",
+										"com"
+									],
+									"path": [
+										"sdwan",
+										"v2.0",
+										"api",
+										"sites",
+										"1741295428037016145",
+										"elements",
+										"1741293965355008345",
+										"securityzones",
+										"1741701350095013145"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "PUT-Site-Element-SecurityZone-ZoneBindings-add-Interface",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"_etag\": {{etag}},\n    \"_schema\": 1,\n    \"zone_id\": \"1741070616931015345\",\n    \"lannetwork_ids\": [],\n    \"interface_ids\": [\n        \"1741294034078022545\",\n        \"1741294034030021945\"\n    ],\n    \"wanoverlay_ids\": [],\n    \"waninterface_ids\": []\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "https://api.sase.paloaltonetworks.com/sdwan/v2.0/api/sites/1741295428037016145/elements/1741293965355008345/securityzones/1741701350095013145",
+									"protocol": "https",
+									"host": [
+										"api",
+										"sase",
+										"paloaltonetworks",
+										"com"
+									],
+									"path": [
+										"sdwan",
+										"v2.0",
+										"api",
+										"sites",
+										"1741295428037016145",
+										"elements",
+										"1741293965355008345",
+										"securityzones",
+										"1741701350095013145"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "GET ALERTS",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"var template = `",
+											"<style type=\"text/css\">",
+											"    .tftable {font-size:14px;color:#333333;width:100%;border-width: 1px;border-color: #87ceeb;border-collapse: collapse;}",
+											"    .tftable th {font-size:18px;background-color:#87ceeb;border-width: 1px;padding: 8px;border-style: solid;border-color: #87ceeb;text-align:left;}",
+											"    .tftable tr {background-color:#ffffff;}",
+											"    .tftable td {font-size:14px;border-width: 1px;padding: 8px;border-style: solid;border-color: #87ceeb;}",
+											"    .tftable tr:hover {background-color:#e0ffff;}",
+											"</style>",
+											"",
+											"<table class=\"tftable\" border=\"1\">",
+											"    <tr>",
+											"        <th>Element ID</th>",
+											"        <th>Code</th>",
+											"        <th>Severity</th>",
+											"        <th>Time</th>",
+											"    </tr>",
+											"    ",
+											"    {{#each response.items}}",
+											"        <tr>",
+											"            <td>{{element_id}}</td>",
+											"            <td>{{code}}</td>",
+											"            <td>{{severity}}</td>",
+											"            <td>{{time}}</td>",
+											"        </tr>",
+											"    {{/each}}",
+											"</table>",
+											"`;",
+											"",
+											"function constructVisualizerPayload() {",
+											"    var res = pm.response.json();",
+											"    ",
+											"    var visualizerData = {",
+											"        items: res.items",
+											"    };",
+											"",
+											"    return {response: visualizerData};",
+											"}",
+											"",
+											"pm.visualizer.set(template, constructVisualizerPayload());"
+										],
+										"type": "text/javascript",
+										"packages": {}
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "accept",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer <ACCESS_TOKEN>"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "X-PANW-Region",
+										"value": "de"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\"limit\":{\"count\":25,\"sort_on\":\"time\",\"sort_order\":\"descending\"},\"dest_page\":0,\"view\":{\"summary\":false},\"priority\":[],\"severity\":[],\"query\":{\"site\":[],\"category\":[],\"code\":[],\"correlation_id\":[],\"type\":[\"alert\"]},\"start_time\":\"2025-03-01T17:18:03.662Z\",\"end_time\":\"2025-04-08T17:18:03.662Z\"}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "https://api.sase.paloaltonetworks.com/sdwan/v3.6/api/events/query",
+									"protocol": "https",
+									"host": [
+										"api",
+										"sase",
+										"paloaltonetworks",
+										"com"
+									],
+									"path": [
+										"sdwan",
+										"v3.6",
+										"api",
+										"events",
+										"query"
+									]
+								},
+								"description": "Generated from cURL: curl -X POST \"https://api.sase.paloaltonetworks.com/mt/monitor/v1/agg/alerts/list?agg_by=tenant\" \\\n-H 'accept: application/json' \\\n-H \"Authorization: Bearer <ACCESS_TOKEN>\" \\\n-H \"Content-Type: application/json\" \\\n-H \"X-PANW-Region: de\" \\\n-d '{\"properties\":[{\"property\":\"sub_tenant_id\"},{\"property\":\"total_count\"}],\"filter\":{\"operator\":\"AND\",\"rules\":[{\"property\":\"domain\",\"operator\":\"in\",\"values\":[\"External\",\"external\"]},{\"property\":\"event_time\",\"operator\":\"last_n_days\",\"values\":[7]}]}}'"
+							},
+							"response": []
+						},
+						{
+							"name": "GET ALERTS Copy",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"var template = `",
+											"<style type=\"text/css\">",
+											"    .tftable {font-size:14px;color:#333333;width:100%;border-width: 1px;border-color: #87ceeb;border-collapse: collapse;}",
+											"    .tftable th {font-size:18px;background-color:#87ceeb;border-width: 1px;padding: 8px;border-style: solid;border-color: #87ceeb;text-align:left;}",
+											"    .tftable tr {background-color:#ffffff;}",
+											"    .tftable td {font-size:14px;border-width: 1px;padding: 8px;border-style: solid;border-color: #87ceeb;}",
+											"    .tftable tr:hover {background-color:#e0ffff;}",
+											"</style>",
+											"",
+											"<table class=\"tftable\" border=\"1\">",
+											"    <tr>",
+											"        <th>Element ID</th>",
+											"        <th>Code</th>",
+											"        <th>Severity</th>",
+											"        <th>Time</th>",
+											"    </tr>",
+											"    ",
+											"    {{#each response.items}}",
+											"        <tr>",
+											"            <td>{{element_id}}</td>",
+											"            <td>{{code}}</td>",
+											"            <td>{{severity}}</td>",
+											"            <td>{{time}}</td>",
+											"        </tr>",
+											"    {{/each}}",
+											"</table>",
+											"`;",
+											"",
+											"function constructVisualizerPayload() {",
+											"    var res = pm.response.json();",
+											"    ",
+											"    var visualizerData = {",
+											"        items: res.items",
+											"    };",
+											"",
+											"    return {response: visualizerData};",
+											"}",
+											"",
+											"pm.visualizer.set(template, constructVisualizerPayload());"
+										],
+										"type": "text/javascript",
+										"packages": {}
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "accept",
+										"value": "application/json"
+									},
+									{
+										"key": "Authorization",
+										"value": "Bearer <ACCESS_TOKEN>"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									},
+									{
+										"key": "X-PANW-Region",
+										"value": "de",
+										"disabled": true
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\"limit\":{\"count\":25,\"sort_on\":\"time\",\"sort_order\":\"descending\"},\"dest_page\":0,\"view\":{\"summary\":false},\"priority\":[],\"severity\":[],\"query\":{\"site\":[],\"category\":[],\"code\":[],\"correlation_id\":[],\"type\":[\"alert\"]},\"start_time\":\"2025-03-01T17:18:03.662Z\",\"end_time\":\"2025-04-08T17:18:03.662Z\"}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "https://api.sase.paloaltonetworks.com/sdwan/v3.6/api/events/query",
+									"protocol": "https",
+									"host": [
+										"api",
+										"sase",
+										"paloaltonetworks",
+										"com"
+									],
+									"path": [
+										"sdwan",
+										"v3.6",
+										"api",
+										"events",
+										"query"
+									]
+								},
+								"description": "Generated from cURL: curl -X POST \"https://api.sase.paloaltonetworks.com/mt/monitor/v1/agg/alerts/list?agg_by=tenant\" \\\n-H 'accept: application/json' \\\n-H \"Authorization: Bearer <ACCESS_TOKEN>\" \\\n-H \"Content-Type: application/json\" \\\n-H \"X-PANW-Region: de\" \\\n-d '{\"properties\":[{\"property\":\"sub_tenant_id\"},{\"property\":\"total_count\"}],\"filter\":{\"operator\":\"AND\",\"rules\":[{\"property\":\"domain\",\"operator\":\"in\",\"values\":[\"External\",\"external\"]},{\"property\":\"event_time\",\"operator\":\"last_n_days\",\"values\":[7]}]}}'"
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Step 0 - profile (initial call to make and then use the Token)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://{{_base_url_}}/sdwan/v2.1/api/profile",
+							"protocol": "https",
+							"host": [
+								"{{_base_url_}}"
+							],
+							"path": [
+								"sdwan",
+								"v2.1",
+								"api",
+								"profile"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Step 0.1 - Get X-Region",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://api.sase.paloaltonetworks.com/mt/monitor/v1/agg/custom/tenant/hierarchy",
+							"protocol": "https",
+							"host": [
+								"api",
+								"sase",
+								"paloaltonetworks",
+								"com"
+							],
+							"path": [
+								"mt",
+								"monitor",
+								"v1",
+								"agg",
+								"custom",
+								"tenant",
+								"hierarchy"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "GetSites",
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "accept",
+						"value": "application/json"
+					},
+					{
+						"key": "Authorization",
+						"value": "Bearer <ACCESS_TOKEN>"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					},
+					{
+						"key": "X-PANW-Region",
+						"value": "de"
+					}
+				],
+				"url": {
+					"raw": "https://{{_base_url_}}/sdwan/v4.12/api/sites",
+					"protocol": "https",
+					"host": [
+						"{{_base_url_}}"
+					],
+					"path": [
+						"sdwan",
+						"v4.12",
+						"api",
+						"sites"
+					]
+				},
+				"description": "Generated from cURL: curl -X POST \"https://api.sase.paloaltonetworks.com/mt/monitor/v1/agg/alerts/list?agg_by=tenant\" \\\n-H 'accept: application/json' \\\n-H \"Authorization: Bearer <ACCESS_TOKEN>\" \\\n-H \"Content-Type: application/json\" \\\n-H \"X-PANW-Region: de\" \\\n-d '{\"properties\":[{\"property\":\"sub_tenant_id\"},{\"property\":\"total_count\"}],\"filter\":{\"operator\":\"AND\",\"rules\":[{\"property\":\"domain\",\"operator\":\"in\",\"values\":[\"External\",\"external\"]},{\"property\":\"event_time\",\"operator\":\"last_n_days\",\"values\":[7]}]}}'"
+			},
+			"response": []
+		}
+	],
+	"auth": {
+		"type": "oauth2",
+		"oauth2": [
+			{
+				"key": "scope",
+				"value": "{{ _tsg_child_tenant }}",
+				"type": "string"
+			},
+			{
+				"key": "accessTokenUrl",
+				"value": "{{ _.auth_url }}",
+				"type": "string"
+			},
+			{
+				"key": "clientSecret",
+				"value": "{{ _.secret }}",
+				"type": "string"
+			},
+			{
+				"key": "clientId",
+				"value": "{{ _.clientid }}",
+				"type": "string"
+			},
+			{
+				"key": "refreshTokenUrl",
+				"value": "https://auth.apps.paloaltonetworks.com/oauth2/access_token",
+				"type": "string"
+			},
+			{
+				"key": "addTokenTo",
+				"value": "header",
+				"type": "string"
+			},
+			{
+				"key": "tokenName",
+				"value": "MyTokenSASE",
+				"type": "string"
+			},
+			{
+				"key": "grant_type",
+				"value": "client_credentials",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	]
+}
