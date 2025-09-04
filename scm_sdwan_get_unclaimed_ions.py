@@ -1,3 +1,8 @@
+#Author: Vladimir Franca de Sousa vfrancad@gmail.com
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2025 <Your Name>
+# Disclaimer: Personal project by a Palo Alto Networks employee.
+# Not an official PANW product. No support/warranty. See DISCLAIMER.md.
 import os
 import csv
 import json
