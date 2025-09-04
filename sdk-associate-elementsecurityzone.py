@@ -1,6 +1,8 @@
-#Author: Vladimir Franca de Sousa
-#Sample script posted not as an Palo Alto Network employee - Use at your own risk!
-
+#Author: Vladimir Franca de Sousa vfrancad@gmail.com
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2025 <Your Name>
+# Disclaimer: Personal project by a Palo Alto Networks employee.
+# Not an official PANW product. No support/warranty. See DISCLAIMER.md.
 import prisma_sase
 from prisma_sase import API
 import http.client
