@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2025 <Your Name>
+# Copyright (c) 2025 Vladimir F de Sousa - vfrancad@gmail.com
 # Disclaimer: Personal project by a Palo Alto Networks employee.
 # Not an official PANW product. No support/warranty. See DISCLAIMER.md.
 
