@@ -1,72 +1,99 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MIT
-# Copyright (c) 2025 Vladimir F de Sousa - vfrancad@gmail.com
-# Disclaimer: Personal project by a Palo Alto Networks employee.
-# Not an official PANW product. No support/warranty. See DISCLAIMER.md.
+# Minimal, working Sites → Elements (+ WAN labels) + AIOps site health
+#
+# Env:
+#   export CLIENT_ID="..."
+#   export CLIENT_SECRET="..."
+#   export TENANT_ID="..."   # (aka tsg_id)
+
+#Prereqs
+#Python 3.9+
+#pip install requests
+#Prisma SASE OAuth2 credentials
+#Note: The script sends requests with header x-panw-region: de.
+#If your tenant is in a different region, change that value in the script.
+#What the script does
+#
+#Lists Sites → Elements, grouped as Branches and Branch Gateways.
+#(Optional) Lists interfaces per element and shows circuit label names attached to them.
+#(Optional) Fetches AIOps Site Health (Good/Fair/Poor) and shows it next to each site.
+#
+#Options
+
+#--interfaces
+#Print interfaces under each element (shows only interfaces that have circuit labels; prints the port name/number and the human-readable label, e.g. public-10, Unmetered 5G Internet (public-5)).
+
+#--health
+#Fetch and show site health (Good/Fair/Poor) for the selected time window.
+
+#--start <ISO8601> and --end <ISO8601>
+#Optional time window for health, e.g. --start 2025-09-12T17:51:16Z --end 2025-09-12T20:46:16Z.
+#If omitted, the script defaults to the last 24 hours.
 
 import os
 import json
-import requests
-from typing import Any, Dict, List, Tuple, Optional
 import argparse
+from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime, timedelta, timezone
+
+import requests
 
 AUTH_URL = "https://auth.apps.paloaltonetworks.com/oauth2/access_token"
 BASE_API_URL = "https://api.sase.paloaltonetworks.com"
 
+# Inventory endpoints
 SITES_EP = "/sdwan/v4.11/api/sites"
 ELEMENTS_TENANT_EP = "/sdwan/v3.1/api/elements"
 INTERFACES_EP = "/sdwan/v4.21/api/sites/{site_id}/elements/{element_id}/interfaces"
-SITE_WAN_IFACES_EP = "/sdwan/v2.8/api/sites/{site_id}/waninterfaces"
+
+# WAN label lookup + site WAN↔interface mapper
 WAN_LABELS_EP = "/sdwan/v2.6/api/waninterfacelabels"
+SITE_WANINTERFACES_EP = "/sdwan/v2.8/api/sites/{site_id}/waninterfaces"
+
+# AIOps health
 AIOPS_HEALTH_EP = "/sdwan/monitor/v2.0/api/monitor/aiops/health"
 
+# cache
 _ELEMENTS_CACHE: Optional[List[Dict[str, Any]]] = None
-_WAN_LABELS_CACHE: Optional[Dict[str, Dict[str, str]]] = None
-_SITE_WAN_IFACES_CACHE: Dict[str, List[Dict[str, Any]]] = {}
+
 
 # ---------- Auth / headers ----------
-
-def get_env_variable(name: str) -> str:
+def _must_env(name: str) -> str:
     v = os.getenv(name)
     if not v:
         raise ValueError(f"Environment variable {name} is not set")
     return v
 
 def get_token() -> str:
-    client_id = get_env_variable("CLIENT_ID")
-    client_secret = get_env_variable("CLIENT_SECRET")
-    tenant_id = get_env_variable("TENANT_ID")
     data = {
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "scope": f"tsg_id:{tenant_id}",
+        "client_id": _must_env("CLIENT_ID"),
+        "client_secret": _must_env("CLIENT_SECRET"),
+        "scope": f"tsg_id:{_must_env('TENANT_ID')}",
         "grant_type": "client_credentials",
     }
-    r = requests.post(AUTH_URL, headers={"Content-Type": "application/x-www-form-urlencoded"}, data=data, timeout=30)
+    r = requests.post(
+        AUTH_URL,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        data=data,
+        timeout=30,
+    )
     r.raise_for_status()
     return r.json()["access_token"]
 
-def get_headers(token: str) -> Dict[str, str]:
+def headers(token: str) -> Dict[str, str]:
     return {
         "accept": "application/json",
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
-        "x-panw-region": "de",  # change if your tenant uses a different region
+        "x-panw-region": "de",  # adjust if your tenant region differs
     }
 
-def get_profile(token: str) -> Dict[str, Any]:
-    url = f"{BASE_API_URL}/sdwan/v2.1/api/profile"
-    r = requests.get(url, headers=get_headers(token), timeout=30)
-    print("profile api status:", r.status_code)
-    r.raise_for_status()
-    return r.json()
 
 # ---------- tiny HTTP ----------
-
-def api_get(endpoint: str, token: str, params: Optional[Dict[str, Any]] = None) -> Any:
-    url = endpoint if endpoint.startswith("http") else f"{BASE_API_URL}{endpoint}"
-    r = requests.get(url, headers=get_headers(token), params=params, timeout=60)
+def api_get(ep: str, token: str, params: Optional[Dict[str, Any]] = None) -> Any:
+    url = ep if ep.startswith("http") else f"{BASE_API_URL}{ep}"
+    r = requests.get(url, headers=headers(token), params=params, timeout=60)
     r.raise_for_status()
     if not r.text.strip():
         return None
@@ -75,9 +102,9 @@ def api_get(endpoint: str, token: str, params: Optional[Dict[str, Any]] = None) 
     except json.JSONDecodeError:
         return r.text
 
-def api_post(endpoint: str, token: str, payload: Dict[str, Any]) -> Any:
-    url = endpoint if endpoint.startswith("http") else f"{BASE_API_URL}{endpoint}"
-    r = requests.post(url, headers=get_headers(token), data=json.dumps(payload), timeout=60)
+def api_post(ep: str, token: str, payload: Dict[str, Any]) -> Any:
+    url = ep if ep.startswith("http") else f"{BASE_API_URL}{ep}"
+    r = requests.post(url, headers=headers(token), data=json.dumps(payload), timeout=60)
     r.raise_for_status()
     if not r.text.strip():
         return None
@@ -86,22 +113,23 @@ def api_post(endpoint: str, token: str, payload: Dict[str, Any]) -> Any:
     except json.JSONDecodeError:
         return r.text
 
-def fetch_all_pages(endpoint: str, token: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-    out: List[Dict[str, Any]] = []
+def fetch_all_pages(ep: str, token: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    res: List[Dict[str, Any]] = []
     q = dict(params or {})
-    next_keys = ("next", "next_page", "nextPageToken", "page.next", "next_token")
     while True:
-        data = api_get(endpoint, token, params=q)
+        data = api_get(ep, token, params=q)
         if isinstance(data, list):
-            out.extend(data)
+            res.extend(data)
         elif isinstance(data, dict):
             if isinstance(data.get("items"), list):
-                out.extend(data["items"])
-            elif data and not out:
-                out.append(data)
+                res.extend(data["items"])
+            else:
+                if not res and data:
+                    res.append(data)
+        # very light cursor handling (common keys)
         nxt = None
         if isinstance(data, dict):
-            for k in next_keys:
+            for k in ("next", "next_page", "nextPageToken", "page.next", "next_token"):
                 if data.get(k):
                     nxt = data[k]
                     break
@@ -109,18 +137,10 @@ def fetch_all_pages(endpoint: str, token: str, params: Optional[Dict[str, Any]] 
             break
         for ck in ("cursor", "page", "page_token", "next"):
             q[ck] = nxt
-    return out
+    return res
 
-# ---------- time ----------
 
-def iso_utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-def iso_utc_hours_ago(hours: int) -> str:
-    return (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat().replace("+00:00", "Z")
-
-# ---------- helpers ----------
-
+# ---------- inventory ----------
 def normalize_id_name(o: Dict[str, Any]) -> None:
     if "id" not in o:
         if "site_id" in o:
@@ -130,16 +150,10 @@ def normalize_id_name(o: Dict[str, Any]) -> None:
     if "name" not in o and "display_name" in o:
         o["name"] = o["display_name"]
 
-def _flatten_dicts(obj):
-    if isinstance(obj, dict):
-        yield obj
-        for v in obj.values():
-            yield from _flatten_dicts(v)
-    elif isinstance(obj, list):
-        for it in obj:
-            yield from _flatten_dicts(it)
-
-# ---------- inventory ----------
+def get_profile(token: str) -> Dict[str, Any]:
+    prof = api_get("/sdwan/v2.1/api/profile", token)
+    print("profile api status: 200")
+    return prof
 
 def get_all_sites(token: str) -> List[Dict[str, Any]]:
     sites = fetch_all_pages(SITES_EP, token)
@@ -156,15 +170,16 @@ def _get_all_elements_cached(token: str) -> List[Dict[str, Any]]:
     return _ELEMENTS_CACHE
 
 def get_site_elements(token: str, site_id: str) -> List[Dict[str, Any]]:
+    elems = _get_all_elements_cached(token)
     sid = str(site_id)
-    return [e for e in _get_all_elements_cached(token) if str(e.get("site_id") or e.get("site") or "") == sid]
+    return [e for e in elems if str(e.get("site_id") or e.get("site") or "") == sid]
 
 def get_element_interfaces(token: str, element_id: str) -> List[Dict[str, Any]]:
     elems = _get_all_elements_cached(token)
-    match = next((e for e in elems if str(e.get("id") or e.get("element_id")) == str(element_id)), None)
-    if not match:
+    m = next((e for e in elems if str(e.get("id") or e.get("element_id")) == str(element_id)), None)
+    if not m:
         return []
-    site_id = str(match.get("site_id") or match.get("site") or "")
+    site_id = str(m.get("site_id") or m.get("site") or "")
     if not site_id:
         return []
     ep = INTERFACES_EP.format(site_id=site_id, element_id=element_id)
@@ -190,329 +205,181 @@ def classify_sites(sites: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], L
             branches.append(s)
     return branches, gateways
 
-# ---------- WAN labels / site WAN ifaces ----------
 
-def _load_wan_labels_map(token: str) -> Dict[str, Dict[str, str]]:
-    global _WAN_LABELS_CACHE
-    if _WAN_LABELS_CACHE is None:
-        items = fetch_all_pages(WAN_LABELS_EP, token)
-        m: Dict[str, Dict[str, str]] = {}
-        for it in items:
-            lid = str(it.get("id"))
-            if lid:
-                m[lid] = {"name": it.get("name") or "", "label": it.get("label") or ""}
-        _WAN_LABELS_CACHE = m
-    return _WAN_LABELS_CACHE
+# ---------- WAN labels ----------
+def get_wan_label_lookup(token: str) -> Dict[str, str]:
+    """
+    Returns { label_id: 'Name (code)' }  e.g. 1751883670130002245 -> 'Unmetered 5G Internet (public-5)'
+    """
+    items = fetch_all_pages(WAN_LABELS_EP, token)
+    lookup: Dict[str, str] = {}
+    for it in items:
+        lid = str(it.get("id", ""))
+        name = it.get("name") or ""
+        code = it.get("label") or ""
+        if lid:
+            disp = f"{name} ({code})" if name and code and name != code else (name or code or lid)
+            lookup[lid] = disp
+    return lookup
 
-def _get_site_wan_ifaces(token: str, site_id: str) -> List[Dict[str, Any]]:
-    sid = str(site_id)
-    if sid not in _SITE_WAN_IFACES_CACHE:
-        ep = SITE_WAN_IFACES_EP.format(site_id=sid)
-        data = api_get(ep, token)
-        if isinstance(data, dict) and isinstance(data.get("items"), list):
-            _SITE_WAN_IFACES_CACHE[sid] = data["items"]
-        elif isinstance(data, list):
-            _SITE_WAN_IFACES_CACHE[sid] = data
-        else:
-            _SITE_WAN_IFACES_CACHE[sid] = []
-    return _SITE_WAN_IFACES_CACHE[sid]
-
-def _label_names_for_site_wan_iface_ids(token: str, site_id: str, sw_ids: List[str]) -> List[str]:
-    if not sw_ids:
-        return []
-    labels_map = _load_wan_labels_map(token)
-    site_wans = _get_site_wan_ifaces(token, site_id)
-    idx = {str(w.get("id")): w for w in site_wans if w.get("id")}
-    out: List[str] = []
-    for swid in sw_ids:
-        w = idx.get(str(swid))
-        if not isinstance(w, dict):
+def get_site_interface_labels_map(token: str, site_id: str, label_lookup: Dict[str, str]) -> Dict[str, List[str]]:
+    """
+    For a site, returns: { interface_id: [label_display, ...] }
+    Uses /sites/{site}/waninterfaces (each has label_id and interface_ids[]).
+    """
+    ep = SITE_WANINTERFACES_EP.format(site_id=site_id)
+    data = api_get(ep, token)
+    items = data.get("items", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
+    mapping: Dict[str, List[str]] = {}
+    for wi in items:
+        label_id = str(wi.get("label_id") or "")
+        if not label_id:
             continue
-        label_ids = []
-        if isinstance(w.get("labels"), list):
-            label_ids.extend([str(x) for x in w.get("labels") if x])
-        if w.get("label_id"):
-            label_ids.append(str(w["label_id"]))
-        if not label_ids:
-            continue
-        for lid in label_ids:
-            meta = labels_map.get(str(lid))
-            if not meta:
-                out.append(f"label_id:{lid}")
-            else:
-                name = meta.get("name") or ""
-                code = meta.get("label") or ""
-                out.append(f"{name} ({code})" if name and code else (name or code or f"label_id:{lid}"))
-    # de-dupe
-    seen = set()
-    uniq = []
-    for s in out:
-        if s not in seen:
-            seen.add(s)
-            uniq.append(s)
-    return uniq
+        label_disp = label_lookup.get(label_id, f"label_id:{label_id}")
+        for intf_id in wi.get("interface_ids", []) or []:
+            iid = str(intf_id)
+            mapping.setdefault(iid, []).append(label_disp)
+    return mapping
 
-def is_wan_interface(intf: Dict[str, Any], label_names: List[str]) -> bool:
-    if label_names:
-        return True
-    used_for = (intf.get("used_for") or "").lower()
-    t = (intf.get("type") or "").lower()
-    return used_for in ("public", "wan") or t == "cellular"
 
-# ---------- AIOps site health (enhanced + debug) ----------
+# ---------- AIOps site health (simple & working) ----------
+def iso_utc_now() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
-def _peek_row(row: Dict[str, Any]) -> None:
-    """Print a compact but informative look at a single health row."""
-    try:
-        keys = list(row.keys())
-        dims = row.get("dimensions") or {}
-        meta = row.get("metadata") or {}
-        print("   row keys:", keys[:12])
-        if dims:
-            print("   dimensions:", {k: dims.get(k) for k in list(dims.keys())[:6]})
-        if meta:
-            print("   metadata:", {k: meta.get(k) for k in list(meta.keys())[:6]})
-        # print potential status fields
-        for k in ("site_health", "status", "state", "health"):
-            if k in row:
-                print(f"   {k}:", row[k])
-        # any scores
-        for k,v in row.items():
-            if isinstance(k, str) and "score" in k.lower():
-                print(f"   {k}:", v)
-    except Exception as e:
-        print("   _peek_row error:", e)
+def iso_utc_hours_ago(hours: int) -> str:
+    return (datetime.now(timezone.utc) - timedelta(hours=hours)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
-def _extract_site_id_from_row(row: Dict[str, Any]) -> Optional[str]:
-    # direct
-    for k in ("site_id", "siteId", "site"):
-        if row.get(k):
-            return str(row[k])
-    # inside dimensions/metadata
-    for container_key in ("dimensions", "metadata"):
-        cont = row.get(container_key)
-        if isinstance(cont, dict):
-            for k in ("site_id", "siteId", "site"):
-                if cont.get(k):
-                    return str(cont[k])
-    return None
+def get_aiops_site_health_map(token: str, start_time: Optional[str] = None, end_time: Optional[str] = None) -> Dict[str, str]:
+    """
+    Calls AIOps health with:
+      view=summary, interval=5min, filter.site_health=[good,fair,poor]
 
-def _extract_status_from_row(row: Dict[str, Any]) -> Optional[str]:
-    # Accept aiops enums: poor|fair|good|all
-    for k in ("status", "site_health", "state", "health"):
-        v = row.get(k)
-        if isinstance(v, str) and v:
-            return v
-    # sometimes nested
-    for container_key in ("dimensions", "metadata"):
-        cont = row.get(container_key)
-        if isinstance(cont, dict):
-            for k in ("status", "site_health", "state", "health"):
-                v = cont.get(k)
-                if isinstance(v, str) and v:
-                    return v
-    return None
+    Expected response shape (example):
+      {
+        "_status_code": 200,
+        "interval": "5min",
+        "start_time": "...",
+        "end_time": "...",
+        "data": [{
+          "type": "site_health",
+          "total": 1,
+          "poor": {"count": 0, "site_ids": []},
+          "fair": {"count": 1, "site_ids": ["1752745283015002645"]},
+          "good": {"count": 0, "site_ids": []}
+        }],
+        "view": "summary"
+      }
 
-def debug_aiops_health(token: str, start_time: str, end_time: str, region_hint: Optional[str] = None) -> None:
-    url = f"{BASE_API_URL}{AIOPS_HEALTH_EP}"
-    headers = get_headers(token)
-    if region_hint:
-        headers["x-panw-region"] = region_hint
+    Returns: { "<site_id>": "good"|"fair"|"poor" }
+    """
+    from datetime import datetime, timedelta, timezone
 
-    trials = [
-        ("summary + site_health=all", {
-            "start_time": start_time, "end_time": end_time, "view": "summary", "interval": "5min",
-            "filter": {"site_health": ["all"]}
-        }),
-        ("detail + explicit enums", {
-            "start_time": start_time, "end_time": end_time, "view": "detail", "interval": "1hour",
-            "filter": {"site_health": ["poor", "fair", "good"]}
-        }),
-        # Best-effort grouping knobs. If schema rejects, you'll see 400 and we move on.
-        ("summary + all + group_by(site)", {
-            "start_time": start_time, "end_time": end_time, "view": "summary", "interval": "1hour",
-            "filter": {"site_health": ["all"]},
-            "group_by": ["site"]
-        }),
-        ("detail + enums + dimensions(site)", {
-            "start_time": start_time, "end_time": end_time, "view": "detail", "interval": "1hour",
-            "filter": {"site_health": ["poor", "fair", "good"]},
-            "dimensions": ["site"]
-        }),
-    ]
+    def _iso_now() -> str:
+        return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
-    print("\n=== AIOps health DEBUG ===")
-    print(f"start_time={start_time}  end_time={end_time}  x-panw-region={headers.get('x-panw-region')}")
-    for name, payload in trials:
-        print(f"\n--- Trial: {name} ---")
-        print("payload:", json.dumps(payload))
-        try:
-            resp = requests.post(url, headers=headers, data=json.dumps(payload), timeout=60)
-            print("status:", resp.status_code)
-            rid = resp.headers.get("x-request-id") or resp.headers.get("x-pan-request-id")
-            if rid:
-                print("request-id:", rid)
-            if resp.status_code >= 400:
-                print("body:", resp.text[:2000])
-                continue
-            data = resp.json() if resp.text.strip() else None
-            if isinstance(data, dict):
-                print("  top-level keys:", list(data.keys()))
-                container = None
-                for k in ("items", "data", "sites", "results"):
-                    if isinstance(data.get(k), list):
-                        container = data[k]; print(f"  using list container '{k}', len={len(container)}")
-                        break
-            elif isinstance(data, list):
-                container = data
-                print(f"  got top-level list, len={len(container)}")
-            else:
-                container = None
+    def _iso_hours_ago(h: int) -> str:
+        return (datetime.now(timezone.utc) - timedelta(hours=h)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
-            if not container:
-                print("  No list container found.")
-                continue
+    if not start_time or not end_time:
+        # default: last 6 hours
+        start_time = _iso_hours_ago(6)
+        end_time = _iso_now()
 
-            # peek at first few rows in full
-            for i, row in enumerate(container[:5]):
-                print(f"  row[{i}]:")
-                if isinstance(row, dict):
-                    _peek_row(row)
-                else:
-                    print("   non-dict row type:", type(row).__name__)
+    payload = {
+        "start_time": start_time,
+        "end_time": end_time,
+        "interval": "5min",
+        "filter": {"site_health": ["good", "fair", "poor"]},
+        "view": "summary",
+    }
 
-            # try to find sample site rows
-            hits = []
-            for row in container:
-                if not isinstance(row, dict):
-                    continue
-                sid = _extract_site_id_from_row(row)
-                status = _extract_status_from_row(row)
-                if sid and status:
-                    hits.append({"site": sid, "status": status})
-                    if len(hits) >= 5:
-                        break
-            print("  sample site rows:", hits if hits else "none")
+    data = api_post(AIOPS_HEALTH_EP, token, payload)
 
-        except Exception as e:
-            print("ERROR:", e)
+    site_health: Dict[str, str] = {}
 
-def get_aiops_site_health_map(token: str, hours_window: int = 24) -> Dict[str, Dict[str, Any]]:
-    start_time = iso_utc_hours_ago(hours_window)
-    end_time = iso_utc_now()
+    # --- Primary: parse summary buckets with site_ids ---
+    if isinstance(data, dict):
+        arr = data.get("data")
+        if isinstance(arr, list):
+            bucket = next((x for x in arr if isinstance(x, dict) and x.get("type") == "site_health"), None)
+            if bucket:
+                for status in ("good", "fair", "poor"):
+                    ids = ((bucket.get(status) or {}).get("site_ids")) or []
+                    for sid in ids:
+                        site_health[str(sid)] = status
 
-    payloads = [
-        # Minimal valid per your 200: filter required; enum uses poor|fair|good|all
-        {"start_time": start_time, "end_time": end_time, "interval": "5min", "view": "summary",
-         "filter": {"site_health": ["all"]}},
-        # Try detail with explicit enums
-        {"start_time": start_time, "end_time": end_time, "interval": "1hour", "view": "detail",
-         "filter": {"site_health": ["poor", "fair", "good"]}},
-        # Try grouping hints (ignored by API if unsupported)
-        {"start_time": start_time, "end_time": end_time, "interval": "1hour", "view": "summary",
-         "filter": {"site_health": ["all"]}, "group_by": ["site"]},
-        {"start_time": start_time, "end_time": end_time, "interval": "1hour", "view": "detail",
-         "filter": {"site_health": ["poor", "fair", "good"]}, "dimensions": ["site"]},
-    ]
+    # --- Fallback: if some tenants return per-row shapes (rare) ---
+    if not site_health:
+        def _walk(obj: Any):
+            if isinstance(obj, dict):
+                sid = obj.get("site_id") or obj.get("site") or obj.get("id")
+                sh = obj.get("site_health") or obj.get("status") or obj.get("health")
+                if sid and isinstance(sh, str):
+                    sh_norm = sh.strip().lower()
+                    if sh_norm in ("good", "fair", "poor"):
+                        site_health[str(sid)] = sh_norm
+                for v in obj.values():
+                    _walk(v)
+            elif isinstance(obj, list):
+                for it in obj:
+                    _walk(it)
+        _walk(data)
 
-    site_health: Dict[str, Dict[str, Any]] = {}
-    last_error: Optional[str] = None
+    # optional, tiny debug
+    if not site_health:
+        print("Note: AIOps health returned no site rows for the given window.")
+    else:
+        counts = {"good": 0, "fair": 0, "poor": 0}
+        for s in site_health.values():
+            if s in counts:
+                counts[s] += 1
+        print(f"AIOps health mapped: good={counts['good']} fair={counts['fair']} poor={counts['poor']}")
 
-    for p in payloads:
-        try:
-            data = api_post(AIOPS_HEALTH_EP, token, p)
-        except requests.HTTPError as e:
-            last_error = f"{e.response.status_code} {e.response.text[:400]}"
-            continue
-
-        # find a list container
-        items: List[Dict[str, Any]] = []
-        container = None
-        if isinstance(data, dict):
-            for k in ("items", "data", "sites", "results"):
-                v = data.get(k)
-                if isinstance(v, list):
-                    container = v
-                    break
-        elif isinstance(data, list):
-            container = data
-
-        if not container:
-            # last resort: scan tree
-            for d in _flatten_dicts(data):
-                if isinstance(d, dict) and any(k in d for k in ("site_id", "siteId", "site")):
-                    items.append(d)
-        else:
-            items = container
-
-        for row in items:
-            if not isinstance(row, dict):
-                continue
-            sid = _extract_site_id_from_row(row)
-            if not sid:
-                continue
-            status = _extract_status_from_row(row)
-            # score: any numeric field containing "score"
-            score = None
-            for k, v in row.items():
-                if isinstance(k, str) and "score" in k.lower() and isinstance(v, (int, float)):
-                    score = float(v); break
-            # normalize status to something readable (keep original if already good/fair/poor)
-            if status:
-                status = str(status).lower()
-                if status in ("good", "fair", "poor", "all"):
-                    pass  # leave as is
-            site_health[str(sid)] = {"status": status, "score": score}
-
-        if site_health:
-            break
-
-    if not site_health and last_error:
-        print(f"AIOps health failed (all payloads). Last error: {last_error}")
     return site_health
 
-# ---------- printing ----------
 
-def _health_str_for_site(site_id: str, health_map: Optional[Dict[str, Dict[str, Any]]]) -> str:
+
+# ---------- printing ----------
+def health_suffix(site_id: str, health_map: Optional[Dict[str, str]]) -> str:
     if not health_map:
         return ""
-    h = health_map.get(str(site_id))
-    if not h:
+    st = health_map.get(str(site_id))
+    if not st:
         return "  [Health: n/a]"
-    status = h.get("status")
-    score = h.get("score")
-    if status and score is not None:
-        return f"  [Health: {status}, score {score:.1f}]"
-    if status:
-        return f"  [Health: {status}]"
-    if score is not None:
-        return f"  [Health score: {score:.1f}]"
-    return "  [Health: n/a]"
+    return f"  [Health: {st.capitalize()}]"
 
-def print_group(title: str, sites: List[Dict[str, Any]], token: str,
-                print_interfaces: bool = False, wan_only: bool = False,
-                health_map: Optional[Dict[str, Dict[str, Any]]] = None) -> None:
+def print_group(
+    title: str,
+    sites: List[Dict[str, Any]],
+    token: str,
+    print_interfaces: bool,
+    wan_only: bool,
+    label_lookup: Dict[str, str],
+    health_map: Optional[Dict[str, str]] = None,
+) -> None:
     print(f"\n########## {title} ({len(sites)}) ##########\n")
     if not sites:
-        print("(none)\n"); return
+        print("(none)\n")
+        return
 
     for s in sorted(sites, key=lambda x: (x.get("name") or "").lower()):
         s_name = s.get("name", "")
-        s_id = str(s.get("id", ""))
-        health_extra = _health_str_for_site(s_id, health_map)
-        print(f"{s_name}  (Site ID: {s_id}){health_extra}")
+        s_id = s.get("id", "")
+        print(f"{s_name}  (Site ID: {s_id}){health_suffix(s_id, health_map)}")
 
         elements = get_site_elements(token, s_id)
         if not elements:
             print("  - Elements: (none)\n")
             continue
 
-        _ = _get_site_wan_ifaces(token, s_id)  # warm cache per-site
+        # Build mapping of interface_id -> [labels] once per site
+        intf_labels_map = get_site_interface_labels_map(token, s_id, label_lookup)
 
         for e in sorted(elements, key=lambda x: (x.get("name") or "").lower()):
             e_name = e.get("name", "")
-            e_id = str(e.get("id", ""))
+            e_id = e.get("id", "")
             print(f"  - {e_name}  (Element ID: {e_id})")
+
             if not print_interfaces:
                 continue
 
@@ -522,48 +389,77 @@ def print_group(title: str, sites: List[Dict[str, Any]], token: str,
                 continue
 
             for it in sorted(intfs, key=lambda x: (x.get("name") or "").lower()):
-                sw_ids = [str(x) for x in (it.get("site_wan_interface_ids") or [])]
-                label_names = _label_names_for_site_wan_iface_ids(token, s_id, sw_ids)
-                if wan_only and not is_wan_interface(it, label_names):
+                iid = str(it.get("id", ""))
+                iname = it.get("name") or iid
+
+                labels_for_intf = intf_labels_map.get(iid, [])
+                # If wan-only is set, only print interfaces that have a circuit label
+                if wan_only and not labels_for_intf:
                     continue
-                if_name = it.get("name") or it.get("id") or ""
-                if label_names:
-                    print(f"      - {if_name} [labels: {', '.join(label_names)}]")
-                else:
-                    print(f"      - {if_name}")
-        print("")
+
+                label_str = ""
+                if labels_for_intf:
+                    # Join multiple labels if present (rare but possible)
+                    label_str = f" [labels: {', '.join(labels_for_intf)}]"
+
+                # If wan-only is False, you still see all interfaces, with labels (if any)
+                print(f"      - {iname}{label_str}")
+
+        print("")  # spacing per site
+
 
 # ---------- main ----------
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Sites → Elements → Interfaces (labels) + optional AIOps Health")
+def main():
+    parser = argparse.ArgumentParser(
+        description="Sites → Elements (optional WAN-labeled Interfaces) + AIOps health (good/fair/poor)"
+    )
     parser.add_argument("--interfaces", action="store_true", help="Print interfaces under each element")
-    parser.add_argument("--wan-only", action="store_true", help="Only include interfaces tied to circuits/obvious WAN")
-    parser.add_argument("--health", action="store_true", help="Fetch and print site health via AIOps")
-    parser.add_argument("--health-window", type=int, default=24, help="Lookback hours for AIOps health (default: 24)")
-    parser.add_argument("--debug-health", action="store_true", help="Verbose AIOps health probes + row peeks")
+    parser.add_argument("--wan-only", action="store_true", help="Only show interfaces that have a circuit label")
+    parser.add_argument("--health", action="store_true", help="Show site health (good/fair/poor) from AIOps")
+    parser.add_argument("--health-window-hours", type=int, default=6,
+                        help="Lookback window in hours for site health (default: 6). Ignored if --health-start/end provided.")
+    parser.add_argument("--health-start", type=str, default=None,
+                        help="Optional ISO8601 start (e.g., 2025-09-12T17:51:16Z)")
+    parser.add_argument("--health-end", type=str, default=None,
+                        help="Optional ISO8601 end   (e.g., 2025-09-12T20:46:16Z)")
     args = parser.parse_args()
 
-    _tenant_id = get_env_variable("TENANT_ID")
+    # Validate env and auth
+    _ = _must_env("TENANT_ID")
     token = get_token()
-    profile = get_profile(token)
-
-    tenant = profile.get("tsg_id") or profile.get("tenant_id") or profile.get("customer_id") or "unknown-tenant"
-    user = profile.get("email") or profile.get("user") or "unknown-user"
+    prof = get_profile(token)
+    tenant = prof.get("tsg_id") or prof.get("tenant_id") or prof.get("customer_id") or "unknown-tenant"
+    user = prof.get("email") or prof.get("user") or "unknown-user"
     print(f"Profile: {user} @ {tenant}")
 
-    # Optional: deep debug across a wider window so you actually see samples if they exist
-    if args.debug_health:
-        dbg_start = iso_utc_hours_ago(max(args.health_window, 24 * 7))
-        debug_aiops_health(token, dbg_start, iso_utc_now(), region_hint=get_headers(token).get("x-panw-region"))
-
+    # Inventory
     sites = get_all_sites(token)
     branches, gateways = classify_sites(sites)
 
-    want_interfaces = args.interfaces or args.wan_only
-    health_map = get_aiops_site_health_map(token, args.health_window) if args.health else None
-    if args.health and not health_map:
-        print("Note: AIOps health returned no items for the given window.")
+    # Label lookup (once)
+    label_lookup = get_wan_label_lookup(token)
 
-    print_group("Branches", branches, token, print_interfaces=want_interfaces, wan_only=args.wan_only, health_map=health_map)
-    print_group("Branch Gateways", gateways, token, print_interfaces=want_interfaces, wan_only=args.wan_only, health_map=health_map)
+    # Health (optional)
+    health_map: Optional[Dict[str, str]] = None
+    if args.health:
+        if args.health_start and args.health_end:
+            start_t, end_t = args.health_start, args.health_end
+        else:
+            start_t = iso_utc_hours_ago(args.health_window_hours)
+            end_t = iso_utc_now()
+        try:
+            health_map = get_aiops_site_health_map(token, start_t, end_t)
+            if not health_map:
+                print("Note: AIOps health returned no site rows for the given window.")
+        except requests.HTTPError as e:
+            print(f"AIOps health error: {e}")
+            health_map = None
+
+    print_if = args.interfaces or args.wan_only
+
+    print_group("Branches", branches, token, print_if, args.wan_only, label_lookup, health_map)
+    print_group("Branch Gateways", gateways, token, print_if, args.wan_only, label_lookup, health_map)
+
+
+if __name__ == "__main__":
+    main()
