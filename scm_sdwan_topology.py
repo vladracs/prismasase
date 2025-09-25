@@ -9,34 +9,38 @@
 #   export CLIENT_ID="..."
 #   export CLIENT_SECRET="..."
 #   export TENANT_ID="..."   # (aka tsg_id)
+# Usage examples:
+#   python3 scm_sdwan_topology.py --topology-site 1752745283015002645
+#   python3 scm_sdwan_topology.py --topology-site 1752745283015002645 --details --wide
+#   python3 scm_sdwan_topology.py --topology-site 1752745283015002645 --on-demand-only
+#   python3 scm_sdwan_topology.py --topology-site 1752745283015002645 --no-servicelinks --no-stub-links
+#
+# Notes:
+# - Adds detailed enrichment for AnyNet vpnlinks and Service Links (crypto + rekey timers when available).
+# - Region header defaults to "de"; adjust if your tenant differs.
 
 import os
 import json
 import argparse
-from typing import Any, Dict, List, Optional, Tuple
-from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
+from datetime import datetime, timezone
 
 import requests
 
 AUTH_URL = "https://auth.apps.paloaltonetworks.com/oauth2/access_token"
 BASE_API_URL = "https://api.sase.paloaltonetworks.com"
 
-# Inventory endpoints
-SITES_EP = "/sdwan/v4.11/api/sites"
+# Elements cache (for resolving site_id from element_id when printing Service Link details)
 ELEMENTS_TENANT_EP = "/sdwan/v3.1/api/elements"
-INTERFACES_EP = "/sdwan/v4.21/api/sites/{site_id}/elements/{element_id}/interfaces"
-
-# WAN label lookup + site WAN↔interface mapper
-WAN_LABELS_EP = "/sdwan/v2.6/api/waninterfacelabels"
-SITE_WANINTERFACES_EP = "/sdwan/v2.8/api/sites/{site_id}/waninterfaces"
-
-# AIOps health
-AIOPS_HEALTH_EP = "/sdwan/monitor/v2.0/api/monitor/aiops/health"
 
 # Topology
 TOPOLOGY_EP = "/sdwan/v3.6/api/topology"
 
-# cache
+# Status endpoints
+VPNLINK_STATUS_EP_TMPL = "/sdwan/v2.1/api/vpnlinks/{vpn_link_id}/status"
+IF_STATUS_EP_TMPL = "/sdwan/v3.9/api/sites/{site_id}/elements/{element_id}/interfaces/{interface_id}/status"
+
+# Cache
 _ELEMENTS_CACHE: Optional[List[Dict[str, Any]]] = None
 
 
@@ -95,270 +99,44 @@ def api_post(ep: str, token: str, payload: Dict[str, Any]) -> Any:
     except json.JSONDecodeError:
         return r.text
 
-def fetch_all_pages(ep: str, token: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
-    res: List[Dict[str, Any]] = []
-    q = dict(params or {})
-    while True:
-        data = api_get(ep, token, params=q)
-        if isinstance(data, list):
-            res.extend(data)
-        elif isinstance(data, dict):
-            if isinstance(data.get("items"), list):
-                res.extend(data["items"])
-            else:
-                if not res and data:
-                    res.append(data)
-        nxt = None
-        if isinstance(data, dict):
-            for k in ("next", "next_page", "nextPageToken", "page.next", "next_token"):
-                if data.get(k):
-                    nxt = data[k]
-                    break
-        if not nxt:
-            break
-        for ck in ("cursor", "page", "page_token", "next"):
-            q[ck] = nxt
-    return res
+
+# ---------- Elements cache ----------
+def _get_all_elements_cached(token: str) -> List[Dict[str, Any]]:
+    global _ELEMENTS_CACHE
+    if _ELEMENTS_CACHE is None:
+        data = api_get(ELEMENTS_TENANT_EP, token)
+        if isinstance(data, dict) and isinstance(data.get("items"), list):
+            _ELEMENTS_CACHE = data["items"]
+        elif isinstance(data, list):
+            _ELEMENTS_CACHE = data
+        else:
+            _ELEMENTS_CACHE = []
+    return _ELEMENTS_CACHE
+
+def get_site_id_for_element(token: str, element_id: str) -> Optional[str]:
+    elems = _get_all_elements_cached(token)
+    m = next((e for e in elems if str(e.get("id") or e.get("element_id")) == str(element_id)), None)
+    if not m:
+        return None
+    return str(m.get("site_id") or m.get("site") or "")
 
 
-# ---------- inventory ----------
-def normalize_id_name(o: Dict[str, Any]) -> None:
-    if "id" not in o:
-        if "site_id" in o:
-            o["id"] = o["site_id"]
-        elif "element_id" in o:
-            o["id"] = o["element_id"]
-    if "name" not in o and "display_name" in o:
-        o["name"] = o["display_name"]
-
+# ---------- Profile (mandatory warm-up) ----------
 def get_profile(token: str) -> Dict[str, Any]:
     prof = api_get("/sdwan/v2.1/api/profile", token)
     print("profile api status: 200")
     return prof
 
-def get_all_sites(token: str) -> List[Dict[str, Any]]:
-    sites = fetch_all_pages(SITES_EP, token)
-    for s in sites:
-        normalize_id_name(s)
-    return sites
 
-def _get_all_elements_cached(token: str) -> List[Dict[str, Any]]:
-    global _ELEMENTS_CACHE
-    if _ELEMENTS_CACHE is None:
-        _ELEMENTS_CACHE = fetch_all_pages(ELEMENTS_TENANT_EP, token)
-        for e in _ELEMENTS_CACHE:
-            normalize_id_name(e)
-    return _ELEMENTS_CACHE
-
-def get_site_elements(token: str, site_id: str) -> List[Dict[str, Any]]:
-    elems = _get_all_elements_cached(token)
-    sid = str(site_id)
-    return [e for e in elems if str(e.get("site_id") or e.get("site") or "") == sid]
-
-def get_element_interfaces(token: str, element_id: str) -> List[Dict[str, Any]]:
-    elems = _get_all_elements_cached(token)
-    m = next((e for e in elems if str(e.get("id") or e.get("element_id")) == str(element_id)), None)
-    if not m:
-        return []
-    site_id = str(m.get("site_id") or m.get("site") or "")
-    if not site_id:
-        return []
-    ep = INTERFACES_EP.format(site_id=site_id, element_id=element_id)
-    raw = api_get(ep, token)
-    if isinstance(raw, list):
-        intfs = raw
-    elif isinstance(raw, dict) and isinstance(raw.get("items"), list):
-        intfs = raw["items"]
-    elif isinstance(raw, dict):
-        intfs = [raw]
-    else:
-        intfs = []
-    for it in intfs:
-        normalize_id_name(it)
-    return intfs
-
-def classify_sites(sites: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    branches, gateways = [], []
-    for s in sites:
-        if s.get("branch_gateway", False):
-            gateways.append(s)
-        else:
-            branches.append(s)
-    return branches, gateways
-
-
-# ---------- WAN labels ----------
-def get_wan_label_lookup(token: str) -> Dict[str, str]:
-    """
-    Returns { label_id: 'Name (code)' }
-    """
-    items = fetch_all_pages(WAN_LABELS_EP, token)
-    lookup: Dict[str, str] = {}
-    for it in items:
-        lid = str(it.get("id", ""))
-        name = it.get("name") or ""
-        code = it.get("label") or ""
-        if lid:
-            disp = f"{name} ({code})" if name and code and name != code else (name or code or lid)
-            lookup[lid] = disp
-    return lookup
-
-def get_site_interface_labels_map(token: str, site_id: str, label_lookup: Dict[str, str]) -> Dict[str, List[str]]:
-    """
-    For a site, returns: { interface_id: [label_display, ...] }
-    Uses /sites/{site}/waninterfaces (each has label_id and interface_ids[]).
-    """
-    ep = SITE_WANINTERFACES_EP.format(site_id=site_id)
-    data = api_get(ep, token)
-    items = data.get("items", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
-    mapping: Dict[str, List[str]] = {}
-    for wi in items:
-        label_id = str(wi.get("label_id") or "")
-        if not label_id:
-            continue
-        label_disp = label_lookup.get(label_id, f"label_id:{label_id}")
-        for intf_id in wi.get("interface_ids", []) or []:
-            iid = str(intf_id)
-            mapping.setdefault(iid, []).append(label_disp)
-    return mapping
-
-
-# ---------- AIOps site health ----------
-def iso_utc_now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-
-def iso_utc_hours_ago(hours: int) -> str:
-    return (datetime.now(timezone.utc) - timedelta(hours=hours)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-
-def get_aiops_site_health_map(token: str, start_time: Optional[str] = None, end_time: Optional[str] = None) -> Dict[str, str]:
-    if not start_time or not end_time:
-        start_time = iso_utc_hours_ago(6)
-        end_time = iso_utc_now()
-
-    payload = {
-        "start_time": start_time,
-        "end_time": end_time,
-        "interval": "5min",
-        "filter": {"site_health": ["good", "fair", "poor"]},
-        "view": "summary",
-    }
-
-    data = api_post(AIOPS_HEALTH_EP, token, payload)
-    site_health: Dict[str, str] = {}
-
-    if isinstance(data, dict):
-        arr = data.get("data")
-        if isinstance(arr, list):
-            bucket = next((x for x in arr if isinstance(x, dict) and x.get("type") == "site_health"), None)
-            if bucket:
-                for status in ("good", "fair", "poor"):
-                    ids = ((bucket.get(status) or {}).get("site_ids")) or []
-                    for sid in ids:
-                        site_health[str(sid)] = status
-
-    if not site_health:
-        def _walk(obj: Any):
-            if isinstance(obj, dict):
-                sid = obj.get("site_id") or obj.get("site") or obj.get("id")
-                sh = obj.get("site_health") or obj.get("status") or obj.get("health")
-                if sid and isinstance(sh, str):
-                    sh_norm = sh.strip().lower()
-                    if sh_norm in ("good", "fair", "poor"):
-                        site_health[str(sid)] = sh_norm
-                for v in obj.values():
-                    _walk(v)
-            elif isinstance(obj, list):
-                for it in obj:
-                    _walk(it)
-        _walk(data)
-
-    if not site_health:
-        print("Note: AIOps health returned no site rows for the given window.")
-    else:
-        counts = {"good": 0, "fair": 0, "poor": 0}
-        for s in site_health.values():
-            if s in counts:
-                counts[s] += 1
-        print(f"AIOps health mapped: good={counts['good']} fair={counts['fair']} poor={counts['poor']}")
-    return site_health
-
-
-# ---------- printing (existing) ----------
-def health_suffix(site_id: str, health_map: Optional[Dict[str, str]]) -> str:
-    if not health_map:
-        return ""
-    st = health_map.get(str(site_id))
-    if not st:
-        return "  [Health: n/a]"
-    return f"  [Health: {st.capitalize()}]"
-
-def print_group(
-    title: str,
-    sites: List[Dict[str, Any]],
-    token: str,
-    print_interfaces: bool,
-    wan_only: bool,
-    label_lookup: Dict[str, str],
-    health_map: Optional[Dict[str, str]] = None,
-) -> None:
-    print(f"\n########## {title} ({len(sites)}) ##########\n")
-    if not sites:
-        print("(none)\n")
-        return
-
-    for s in sorted(sites, key=lambda x: (x.get("name") or "").lower()):
-        s_name = s.get("name", "")
-        s_id = s.get("id", "")
-        print(f"{s_name}  (Site ID: {s_id}){health_suffix(s_id, health_map)}")
-
-        elements = get_site_elements(token, s_id)
-        if not elements:
-            print("  - Elements: (none)\n")
-            continue
-
-        intf_labels_map = get_site_interface_labels_map(token, s_id, label_lookup)
-
-        for e in sorted(elements, key=lambda x: (x.get("name") or "").lower()):
-            e_name = e.get("name", "")
-            e_id = e.get("id", "")
-            print(f"  - {e_name}  (Element ID: {e_id})")
-
-            if not print_interfaces:
-                continue
-
-            intfs = get_element_interfaces(token, e_id)
-            if not intfs:
-                print("      Interfaces: (none)")
-                continue
-
-            for it in sorted(intfs, key=lambda x: (x.get("name") or "").lower()):
-                iid = str(it.get("id", ""))
-                iname = it.get("name") or iid
-
-                labels_for_intf = intf_labels_map.get(iid, [])
-                if wan_only and not labels_for_intf:
-                    continue
-
-                label_str = f" [labels: {', '.join(labels_for_intf)}]" if labels_for_intf else ""
-                print(f"      - {iname}{label_str}")
-
-        print("")
-
-
-# ========== NEW: Topology helpers ==========
+# ---------- Topology + Details ----------
 def get_topology(
     token: str,
     site_id: Optional[str],
     include_servicelinks: bool = True,
     include_stub_links: bool = True,
-    topo_type: str = "anynet",   # "anynet" or "all" (API expects a string; "anynet" is what you used)
+    topo_type: str = "anynet",
 ) -> Dict[str, Any]:
-    """
-    Calls /sdwan/v3.6/api/topology with your desired filters.
-    """
-    payload: Dict[str, Any] = {
-        "type": topo_type,  # "anynet" shows fabric + (optionally) servicelinks + stubs per your flags
-    }
+    payload: Dict[str, Any] = {"type": topo_type}
     if site_id:
         payload["site_id"] = str(site_id)
     if include_servicelinks:
@@ -369,7 +147,6 @@ def get_topology(
     data = api_post(TOPOLOGY_EP, token, payload)
     if not isinstance(data, dict):
         raise ValueError("Unexpected topology response")
-    # Normalize presence of keys
     data.setdefault("nodes", [])
     data.setdefault("links", [])
     return data
@@ -384,19 +161,35 @@ def _node_name(n: Dict[str, Any]) -> str:
         return n.get("name") or "Internet"
     return n.get("name") or str(n.get("id"))
 
-def print_topology(topo: Dict[str, Any], wide: bool = False, on_demand_only: bool = False) -> None:
+def _fmt_epoch_ms(ms: Optional[int]) -> str:
+    try:
+        if not ms:
+            return "n/a"
+        return datetime.fromtimestamp(int(ms)/1000, tz=timezone.utc).isoformat().replace("+00:00", "Z")
+    except Exception:
+        return str(ms)
+
+def get_vpnlink_status(token: str, vpn_link_id: str) -> Dict[str, Any]:
+    ep = VPNLINK_STATUS_EP_TMPL.format(vpn_link_id=str(vpn_link_id))
+    data = api_get(ep, token)
+    return data if isinstance(data, dict) else {}
+
+def get_interface_status(token: str, site_id: str, element_id: str, interface_id: str) -> Dict[str, Any]:
+    ep = IF_STATUS_EP_TMPL.format(site_id=str(site_id), element_id=str(element_id), interface_id=str(interface_id))
+    data = api_get(ep, token)
+    return data if isinstance(data, dict) else {}
+
+def print_topology(topo: Dict[str, Any], *, wide: bool = False, on_demand_only: bool = False,
+                   details: bool = False, token: Optional[str] = None) -> None:
     nodes: List[Dict[str, Any]] = topo.get("nodes", [])
     links: List[Dict[str, Any]] = topo.get("links", [])
 
-    # Build id -> node lookup
     node_by_id: Dict[str, Dict[str, Any]] = {str(n.get("id")): n for n in nodes}
 
-    # Header
     typ = topo.get("type", "anynet")
     print(f"\n########## Topology view (type={typ}) ##########")
     print(f"Nodes: {len(nodes)} | Links: {len(links)}\n")
 
-    # Pretty print nodes
     if nodes:
         print("Nodes:")
         for n in nodes:
@@ -416,7 +209,6 @@ def print_topology(topo: Dict[str, Any], wide: bool = False, on_demand_only: boo
             print(f"  - {name} [{ntype}] id={nid}{extra_str}")
         print("")
 
-    # Filter links if requested
     if on_demand_only:
         links = [l for l in links if (l.get("sub_type") == "on-demand")]
 
@@ -424,10 +216,9 @@ def print_topology(topo: Dict[str, Any], wide: bool = False, on_demand_only: boo
         print("Links: (none)\n")
         return
 
-    # Links table
     print("Links:")
     for L in links:
-        ltype = L.get("type")  # servicelink | public-anynet | internet-stub | ...
+        ltype = L.get("type")
         status = L.get("status")
         subtype = L.get("sub_type")
         src_id = str(L.get("source_node_id"))
@@ -437,18 +228,14 @@ def print_topology(topo: Dict[str, Any], wide: bool = False, on_demand_only: boo
         src_name = _node_name(src)
         dst_name = _node_name(dst)
 
-        # WAN/network decorations (when present)
         src_wan = L.get("source_wan_network") or L.get("network")
         dst_wan = L.get("target_wan_network") or L.get("network")
 
-        left = f"{src_name}"
-        if src_wan:
-            left += f" [{src_wan}]"
+        left = f"{src_name}" + (f" [{src_wan}]" if src_wan else "")
         right = f"{dst_name}"
         if dst_wan and ltype != "servicelink":
             right += f" [{dst_wan}]"
 
-        # Extras
         extras: List[str] = []
         if ltype == "servicelink":
             sep = L.get("sep_name")
@@ -457,7 +244,7 @@ def print_topology(topo: Dict[str, Any], wide: bool = False, on_demand_only: boo
                 extras.append(f"WAN={wan_name}")
             if sep:
                 extras.append(f"SEP={sep}")
-        if ltype.endswith("anynet"):
+        if ltype and ltype.endswith("anynet"):
             v = L.get("vpnlinks")
             if isinstance(v, list):
                 extras.append(f"vpnlinks={len(v)}")
@@ -467,27 +254,61 @@ def print_topology(topo: Dict[str, Any], wide: bool = False, on_demand_only: boo
             extras.append(f"cost={L.get('cost')}")
         if subtype:
             extras.append(f"sub={subtype}")
-
-        # Wide mode includes path_id and IDs
         if wide:
-            pid = L.get("path_id")
-            extras.insert(0, f"path_id={pid}")
+            extras.insert(0, f"path_id={L.get('path_id')}")
             extras.append(f"src_id={src_id}")
             extras.append(f"dst_id={dst_id}")
 
         extras_str = f" ({', '.join(extras)})" if extras else ""
         print(f"  - {status:<4} | {ltype:<14} | {left}  -->  {right}{extras_str}")
 
-    print("")
+        # ----- Detailed enrichment -----
+        if details and token:
+            # a) AnyNet vpnlinks
+            if ltype and ltype.endswith("anynet"):
+                vlist = L.get("vpnlinks") or []
+                for vid in vlist:
+                    st = get_vpnlink_status(token, str(vid)) or {}
+                    op = st.get("operational_state") or st.get("oper_state") or "?"
+                    ex = st.get("extended_state") or st.get("state") or ""
+                    peer = (st.get("remote_endpoint") or {}).get("peer_ip") or st.get("peer_ip") or ""
+                    last = _fmt_epoch_ms(st.get("last_state_change"))
+                    ike = st.get("ike") or st.get("ike_algo") or ""
+                    ipsec = st.get("ipsec") or st.get("ipsec_algo") or ""
+                    algos = []
+                    if ike: algos.append(f"IKE={ike}")
+                    if ipsec: algos.append(f"IPsec={ipsec}")
+                    algostr = f" [{', '.join(algos)}]" if algos else ""
+                    print(f"      · vpnlink {vid}: oper={op} ext={ex} peer={peer} last_change={last}{algostr}")
+
+            # b) Service Links (interface-level status with crypto/rekeys)
+            if ltype == "servicelink":
+                elem_if = L.get("elem_interface_id")
+                elem_id = L.get("element_id")
+                if elem_if and elem_id:
+                    site_id = get_site_id_for_element(token, str(elem_id))
+                    if site_id:
+                        ist = get_interface_status(token, site_id, str(elem_id), str(elem_if)) or {}
+                        sl = ist.get("service_link") or {}
+                        op = ist.get("operational_state") or "?"
+                        ex = ist.get("extended_state") or ""
+                        peer = ist.get("remote_v4_addr") or ""
+                        ike = sl.get("ike_algo") or ""
+                        ipsec = sl.get("ipsec_algo") or ""
+                        laddr = sl.get("local_tunnel_v4_addr") or ""
+                        last_ike = _fmt_epoch_ms(sl.get("ike_last_rekeyed"))
+                        next_ike = _fmt_epoch_ms(sl.get("ike_next_rekey"))
+                        last_ipsec = _fmt_epoch_ms(sl.get("ipsec_last_rekeyed"))
+                        next_ipsec = _fmt_epoch_ms(sl.get("ipsec_next_rekey"))
+                        print(f"      · servicelink if:{elem_if} oper={op} ext={ex} local={laddr} peer={peer}")
+                        if ike or ipsec:
+                            print(f"        crypto: IKE={ike}  IPsec={ipsec}")
+                        print(f"        rekeys: IKE last={last_ike} next={next_ike} | IPsec last={last_ipsec} next={next_ipsec}")
 
 
 # ---------- main ----------
 def main():
-    parser = argparse.ArgumentParser(
-        description="Topology"
-    )
- 
-    # NEW: topology args
+    parser = argparse.ArgumentParser(description="Prisma SD-WAN Topology (with per-tunnel details)")
     parser.add_argument("--topology-site", type=str, default=None,
                         help="If set, prints a topology view centered on the given site_id (same as topology API site_id).")
     parser.add_argument("--topology-type", type=str, default="anynet",
@@ -504,6 +325,8 @@ def main():
                         help="Show only on-demand anynet links in topology output.")
     parser.add_argument("--wide", action="store_true",
                         help="Wide topology output (include IDs and path_id).")
+    parser.add_argument("--details", action="store_true",
+                        help="Fetch per-tunnel details for AnyNet VPN links and Service Links.")
     args = parser.parse_args()
 
     # Validate env and auth
@@ -514,19 +337,18 @@ def main():
     user = prof.get("email") or prof.get("user") or "unknown-user"
     print(f"Profile: {user} @ {tenant}")
 
-    # If user asked for topology, do it first (fast and self-contained)
-    if args.topology_site or args.topology_type:
-        inc_sl = False if args.no_servicelinks else True if (args.servicelinks or not args.no_servicelinks) else True
-        inc_stub = False if args.no_stub_links else True if (args.stub_links or not args.no_stub_links) else True
+    # Topology first (fast)
+    inc_sl = False if args.no_servicelinks else True if (args.servicelinks or not args.no_servicelinks) else True
+    inc_stub = False if args.no_stub_links else True if (args.stub_links or not args.no_stub_links) else True
 
-        topo = get_topology(
-            token=token,
-            site_id=args.topology_site,
-            include_servicelinks=inc_sl,
-            include_stub_links=inc_stub,
-            topo_type=args.topology_type or "anynet",
-        )
-        print_topology(topo, wide=args.wide, on_demand_only=args.on_demand_only)
+    topo = get_topology(
+        token=token,
+        site_id=args.topology_site,
+        include_servicelinks=inc_sl,
+        include_stub_links=inc_stub,
+        topo_type=args.topology_type or "anynet",
+    )
+    print_topology(topo, wide=args.wide, on_demand_only=args.on_demand_only, details=args.details, token=token)
 
 
 if __name__ == "__main__":
