@@ -26,9 +26,9 @@ def get_env_variable(name):
 def get_token():
     """Retrieve OAuth2 token using client credentials."""
     try:
-        client_id = get_env_variable("CLIENT_ID")
-        client_secret = get_env_variable("CLIENT_SECRET")
-        tenant_id = get_env_variable("TENANT_ID")
+        client_id = get_env_variable("PRISMASASE_CLIENT_ID")
+        client_secret = get_env_variable("PRISMASASE_CLIENT_SECRET")
+        tenant_id = get_env_variable("PRISMASASE_TSG_ID")
         scope = f"tsg_id:{tenant_id}"
         grant_type = "client_credentials"
 
