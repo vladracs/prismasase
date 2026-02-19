@@ -1,0 +1,527 @@
+---
+type: prismasdwan template
+sdk_version: 6.6.2b1
+config_version: 6.5.1b1
+# Created at 2026-02-16T09:14:09.012619Z
+# by bddf97b6-af1f-45d5-b075-d58a6c001271@1324595687
+# Note: For interface configuration, if the source_interface or parent_interface is a bypasspair port, add the attribute 'parent_type': bypasspair_IF1_IF2 and so on. 
+# If this field is not specified, the prisma_config utility will assume the parent interface is of type 'port'.
+sites v4.13:
+  Azure-EastAU:
+    address:
+      city: Sydney
+      country: Australia
+      post_code: ''
+      state: ''
+      street: ''
+      street2: street2_placeholder
+    admin_state: active
+    app_acceleration_enabled: false
+    branch_gateway: true
+    description:
+    deviceidconfigs v2.1:
+      cfg_device_id_enabled: true
+    element_cluster_role: SPOKE
+    element_system_limit_profile_id:
+    elements v3.2:
+      Azure-vIONeastAU_2wan:
+        admin_action:
+        admin_renew_state:
+        admin_suspend_state: active_suspend_init
+        allowed_roles:
+        - HUB
+        - SPOKE
+        application_probe v2.0:
+          description:
+          enable_probe: true
+          name: default-probe-configuration-1763046418669023545
+          source_interface_id:
+          tags:
+        cellular_modules_sim_security v2.0: {}
+        cluster_id: cluster-one
+        connected: false
+        deployment_op:
+        description:
+        device_change_mode_start_time: 0
+        device_change_mode_state: element_change_mode_init
+        device_mode: none
+        device_profile_id:
+        element_security_zones v2.0: []
+        fips_mode: non_fips
+        fips_mode_change_start_time: 0
+        hub_cluster_config:
+        interfaces v4.21:
+          '1':
+            admin_up: true
+            attached_lan_networks:
+            authentication_config:
+            bound_interfaces:
+            bypass_pair:
+            cellular_config:
+            description: ''
+            devicemgmt_policysetstack_id:
+            dhcp_relay:
+            directed_broadcast: false
+            ethernet_port:
+              full_duplex: false
+              speed: 0
+            fec_mode:
+            interface_profile_id:
+            ipfixcollectorcontext_id:
+            ipfixfiltercontext_id:
+            ipv4_config:
+              dhcp_config:
+              dns_v4_config:
+                name_servers:
+                - 8.8.8.8
+              routes:
+              - destination: 0.0.0.0/0
+                via: 10.5.1.1
+              static_config:
+                address: 10.5.1.10/24
+              type: static
+            ipv6_config:
+            lldp_enabled: false
+            loopback_config:
+            mac_address:
+            mtu: 1500
+            multicast_config:
+              dr_priority: 1
+              igmp_static_joins:
+              igmp_version: IGMPV3
+              multicast_enabled: false
+            nat_address: 4.197.155.102
+            nat_address_v6:
+            nat_pools:
+            nat_port: 4500
+            nat_port_v6: 0
+            nat_zone_id: internet
+            network_context_id:
+            parent:
+            peer_bypasspair_wan_port_type: none
+            poe_enabled: false
+            port_channel_config:
+            power_usage_threshold: 0
+            pppoe_config:
+            scope: local
+            secondary_ip_configs:
+            service_link_config:
+            sgi_apply_static_tag: false
+            site_wan_interface_ids:
+            - Circuit to AZURE
+            static_arp_configs:
+            sub_interface:
+            switch_port_config:
+            tags:
+            type: port
+            used_for: public
+            vlan_config:
+            vrf_context_id: Global
+          '2':
+            admin_up: true
+            attached_lan_networks:
+            authentication_config:
+            bound_interfaces:
+            bypass_pair:
+            cellular_config:
+            description: ''
+            devicemgmt_policysetstack_id:
+            dhcp_relay:
+            directed_broadcast: false
+            ethernet_port:
+              full_duplex: false
+              speed: 0
+            fec_mode:
+            interface_profile_id:
+            ipfixcollectorcontext_id:
+            ipfixfiltercontext_id:
+            ipv4_config:
+              dhcp_config:
+              dns_v4_config:
+              routes:
+              static_config:
+              type: dhcp
+            ipv6_config:
+            lldp_enabled: false
+            loopback_config:
+            mac_address:
+            mtu: 1500
+            multicast_config:
+              dr_priority: 1
+              igmp_static_joins:
+              igmp_version: IGMPV3
+              multicast_enabled: false
+            nat_address:
+            nat_address_v6:
+            nat_pools:
+            nat_port: 0
+            nat_port_v6: 0
+            nat_zone_id:
+            network_context_id:
+            parent:
+            peer_bypasspair_wan_port_type: none
+            poe_enabled: false
+            port_channel_config:
+            power_usage_threshold: 0
+            pppoe_config:
+            scope: local
+            secondary_ip_configs:
+            service_link_config:
+            sgi_apply_static_tag: false
+            site_wan_interface_ids:
+            static_arp_configs:
+            sub_interface:
+            switch_port_config:
+            tags:
+            type: port
+            used_for: lan
+            vlan_config:
+            vrf_context_id: Global
+          '3':
+            admin_up: true
+            attached_lan_networks:
+            authentication_config:
+            bound_interfaces:
+            bypass_pair:
+            cellular_config:
+            description: ''
+            devicemgmt_policysetstack_id:
+            dhcp_relay:
+            directed_broadcast: false
+            ethernet_port:
+              full_duplex: false
+              speed: 0
+            fec_mode:
+            interface_profile_id:
+            ipfixcollectorcontext_id:
+            ipfixfiltercontext_id:
+            ipv4_config:
+              dhcp_config:
+              dns_v4_config:
+                name_servers:
+                - 8.8.8.8
+              routes:
+              - destination: 0.0.0.0/0
+                via: 10.5.1.1
+              static_config:
+                address: 10.5.1.5/24
+              type: static
+            ipv6_config:
+            lldp_enabled: false
+            loopback_config:
+            mac_address:
+            mtu: 1500
+            multicast_config:
+              dr_priority: 1
+              igmp_static_joins:
+              igmp_version: IGMPV3
+              multicast_enabled: false
+            nat_address: 68.218.19.122
+            nat_address_v6:
+            nat_pools:
+            nat_port: 4500
+            nat_port_v6: 0
+            nat_zone_id: internet
+            network_context_id:
+            parent:
+            peer_bypasspair_wan_port_type: none
+            poe_enabled: false
+            port_channel_config:
+            power_usage_threshold: 0
+            pppoe_config:
+            scope: local
+            secondary_ip_configs:
+            service_link_config:
+            sgi_apply_static_tag: false
+            site_wan_interface_ids:
+            - sec-WAN
+            static_arp_configs:
+            sub_interface:
+            switch_port_config:
+            tags:
+            type: port
+            used_for: public
+            vlan_config:
+            vrf_context_id: Global
+          controller 1:
+            admin_up: true
+            attached_lan_networks:
+            authentication_config:
+            bound_interfaces:
+            bypass_pair:
+            cellular_config:
+            description: ''
+            devicemgmt_policysetstack_id:
+            dhcp_relay:
+            directed_broadcast: false
+            ethernet_port:
+              full_duplex: false
+              speed: 0
+            fec_mode:
+            interface_profile_id:
+            ipfixcollectorcontext_id:
+            ipfixfiltercontext_id:
+            ipv4_config:
+              dhcp_config:
+              dns_v4_config:
+              routes:
+              static_config:
+              type: dhcp
+            ipv6_config:
+            lldp_enabled: false
+            loopback_config:
+            mac_address:
+            mtu: 1500
+            multicast_config:
+            nat_address:
+            nat_address_v6:
+            nat_pools:
+            nat_port: 0
+            nat_port_v6: 0
+            nat_zone_id:
+            network_context_id:
+            parent:
+            peer_bypasspair_wan_port_type: none
+            poe_enabled: false
+            port_channel_config:
+            power_usage_threshold: 0
+            pppoe_config:
+            scope: local
+            secondary_ip_configs:
+            service_link_config:
+            sgi_apply_static_tag: false
+            site_wan_interface_ids:
+            static_arp_configs:
+            sub_interface:
+            switch_port_config:
+            tags:
+            type: port
+            used_for: none
+            vlan_config:
+            vrf_context_id: Global
+        l3_direct_private_wan_forwarding: true
+        l3_lan_forwarding: true
+        led_config:
+        main_power_usage_threshold: 0
+        model_name: ion 7108v
+        multicastglobalconfigs v2.1:
+        - bsm_enabled: false
+          dr_priority: 1
+          igmp_protocol_parameters:
+            last_member_query_count: 2
+            last_member_query_interval: 10
+            query_interval: 125
+            query_max_response_time: 100
+          pim_protocol_parameters:
+            hello_hold_time: 105
+            hello_interval: 30
+            join_prune_interval: 60
+          spt_switchover_enabled: true
+        nat_policysetstack_id:
+        network_policysetstack_id:
+        ntp v2.1:
+        - description: Default NTP template created by super user.
+          name: default
+          ntp_servers:
+          - host: 0.cloudgenix.pool.ntp.org
+            max_poll: 10
+            min_poll: 9
+            version: 4
+          - host: 1.cloudgenix.pool.ntp.org
+            max_poll: 10
+            min_poll: 9
+            version: 4
+          - host: 2.cloudgenix.pool.ntp.org
+            max_poll: 10
+            min_poll: 9
+            version: 4
+          - host: 3.cloudgenix.pool.ntp.org
+            max_poll: 10
+            min_poll: 9
+            version: 4
+          - host: time.nist.gov
+            max_poll: 15
+            min_poll: 13
+            version: 4
+          source_interface_ids:
+          tags:
+        ospfglobalconfigs v2.0:
+        - cost:
+          dead_interval: 40
+          hello_interval: 10
+          md5_key_id:
+          md5_secret:
+          prefix_adv_type_to_lan: default
+          retransmit_interval: 5
+          router_id:
+          transmit_delay: 1
+        override_indicator:
+        priority_policysetstack_id:
+        role: SPOKE
+        routing:
+          bgp:
+            global_config v2.5:
+              admin_distance: 20
+              adv_interval: 1
+              graceful_restart: false
+              hold_time: 90
+              ipv6_prefixes_to_adv_to_wan:
+              keepalive_time: 30
+              local_as_num: '65024'
+              maximum_paths: 1
+              md5_secret:
+              multi_hop_limit: 1
+              ospf_redistribution:
+              peer_auth_type: none
+              peer_retry_time: 120
+              prefix_adv_type: unaggregated
+              prefix_adv_type_to_lan: default
+              prefixes_to_adv_to_wan:
+              router_id:
+              stalepath_time: 120
+              vrf_router_id_map:
+          static v2.3: {}
+        serial_number: fff3096c-5127-7144-a9bf-a3a84e7c8090
+        software_version: 6.5.1-b5
+        spoke_ha_config:
+        state: bound
+        switch_config:
+        syslog v2.3:
+        - description:
+          enable_dns_logging:
+          enable_flow_logging:
+          enable_threat_logging:
+          enable_url_logging:
+          enabled: false
+          name: SYSLOG-SERVER1
+          protocol:
+          remote_ca_certificate:
+          server_fqdn:
+          server_ip:
+          server_port:
+          severity_level:
+          source_interface: '1'
+          syslog_profile_id: SYSP
+          tags:
+        - description:
+          enable_dns_logging: false
+          enable_flow_logging: false
+          enable_threat_logging: false
+          enable_url_logging: false
+          enabled: false
+          name: SYSLOG-SERVER2
+          protocol: udp
+          remote_ca_certificate:
+          server_fqdn:
+          server_ip: 2.2.2.2
+          server_port: 514
+          severity_level: major
+          source_interface: '3'
+          syslog_profile_id:
+          tags:
+        tags:
+        tenant_id: '1324595687'
+        toolkit v2.2:
+          account_disable_interval: 5
+          inactive_interval: 15
+          otpkey_version: 1
+          retry_login_count: 5
+          ssh_enabled: true
+          ssh_outbound_enabled: false
+        vpn_to_vpn_forwarding: false
+    extended_tags:
+    hubclusters v4.0:
+      cluster-one:
+        default_cluster: true
+        description: The First Cluster
+        elements:
+        - hub_element_id: Azure-vIONeastAU_2wan
+          locked: false
+        id: '1759559651158006145'
+        peer_sites:
+        - EVE-B1
+        - London Branch
+        - Template-SITE
+        site_count_alarm_threshold: 4
+        tags:
+    location:
+      description:
+      latitude: -33.86873
+      longitude: 151.20695
+    multicast_peer_group_id:
+    nat_policysetstack_id: Acme Corp NAT (Simple)
+    network_policysetstack_id: BRGW-SIMPLE (Simple)
+    perfmgmt_policysetstack_id: Acme Corp Performance (Simple)
+    policy_set_id:
+    prefer_lan_default_over_wan_default_route: false
+    priority_policysetstack_id: Acme Corp QoS (Simple)
+    prismasase_connections v2.1:
+      australia-east:
+        enabled_wan_interface_ids:
+        - Circuit to AZURE
+        - sec-WAN
+        is_active: true
+        is_enabled: true
+        license_type:
+        prismaaccess_qos_cir_mbps: 1
+        prismaaccess_qos_profile_id: cd6016ae-514d-4f03-af82-dccf022c4937
+        remote_network_groups:
+        - name:
+          spn_name:
+          - australia-southeast-zelkova
+        routing_configs:
+          advertise_default_route: false
+          bgp_secret:
+          export_routes: true
+          summarize_mobile_routes_before_advertise: false
+    security_policyset_id:
+    security_policysetstack_id:
+    service_binding: EMEA
+    sgi_config:
+    tags:
+    vrf_context_profile_id: Global Profile
+    waninterfaces v2.10:
+      Circuit to AZURE:
+        app_acceleration_enabled:
+        bfd_mode: aggressive
+        bw_config_mode: manual
+        bwc_enabled: true
+        cost: 128
+        description:
+        l3_reachability:
+        label_id: Primary Internet
+        link_bw_down: 500.0
+        link_bw_up: 500.0
+        lqm_config:
+        lqm_enabled: true
+        network_id: AZURE
+        network_type: publicwan
+        probe_profile_id:
+        tags:
+        type: publicwan
+        use_for_application_reachability_probes:
+        use_for_controller_connections:
+        use_lqm_for_non_hub_paths:
+        vpnlink_configuration:
+      sec-WAN:
+        app_acceleration_enabled:
+        bfd_mode: aggressive
+        bw_config_mode: manual
+        bwc_enabled: true
+        cost: 128
+        description:
+        l3_reachability:
+        label_id: Secondary Internet
+        link_bw_down: 100.0
+        link_bw_up: 100.0
+        lqm_config:
+        lqm_enabled: true
+        network_id: AZURE
+        network_type: publicwan
+        probe_profile_id:
+        tags:
+        type: publicwan
+        use_for_application_reachability_probes:
+        use_for_controller_connections:
+        use_lqm_for_non_hub_paths:
+        vpnlink_configuration:
