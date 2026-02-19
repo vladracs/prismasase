@@ -20,3 +20,21 @@ Configuration Backup: Export a full backup of resources, policies, and sites to 
 Site Teardown: Programmatically decommission and destroy a site via the API.
 Site Rebuild: Automatically rebuild/put the site and device back into production using the previously exported code.
 Policy Recovery: Simulate a misconfiguration (deleting a QoS policy stack in the UI) and instantly restore it using the YAML backup script.
+
+Deutsch:
+1. Berichterstattung & Inventarisierung
+	•	Gezielter Inventar-Status: Dynamisches Abrufen von Gerätestatus und Inventarinformationen, gefiltert nach spezifischen Site-Tags über die API.
+2. Day-2 Operations & Provisionierung
+	•	Remote-Operationen: Auslösen eines Geräteneustarts (Reboot) direkt über die API.
+	•	Netzwerk-Provisionierung: Programmatisches Hinzufügen eines VLANs/Sub-Interfaces zu einem bestehenden Port (einschließlich des automatisierten Resets des Parent-Ports auf Standardeinstellungen).
+3. ZTP & Site-Deployment-Workflow
+	•	Template-Erstellung (UI): Erstellung einer neuen Standort-Vorlage (Site Template) und eines Geräte-Shells basierend auf einer bestehenden Niederlassung.
+	•	Standort-Bereitstellung (UI): Rollout eines neuen Standorts aus einem Template mit manueller Dateneingabe (neuer Standort-/Gerätename, ohne Seriennummer).
+	•	Zero Touch Provisioning (API): Nutzung des ZTP-Skripts, um ein physisches Gerät automatisch dem neu erstellten Standort-Shell zuzuweisen.
+4. Lifecycle-Management & RMA
+	•	Gerätetausch: Durchführung eines Workflows zum Austausch eines bestehenden Geräts durch ein neues Online-System (z. B. ION 1200-S-C5G).
+5. Infrastructure as Code (Backup, Löschen, Wiederherstellen)
+	•	Konfigurations-Backup: Export eines vollständigen Backups aller Ressourcen, Richtlinien (Policies) und Standorte in YAML-Dateien.
+	•	Standort-Rückbau: Programmatische Außerbetriebnahme und Löschung eines Standorts über die API.
+	•	Automatisierter Wiederaufbau: Wiederherstellung des Standorts und Geräts in den Produktionszustand unter Verwendung des zuvor exportierten Codes.
+	•	Wiederherstellung von Richtlinien: Simulation einer Fehlkonfiguration (Löschen eines QoS-Policy-Stacks in der UI) und sofortige Wiederherstellung über das YAML-Backup-Skript.
