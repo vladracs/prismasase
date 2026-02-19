@@ -1,0 +1,22 @@
+Set of Script for Prisma SD-WAN API POV tests
+
+1. Reporting & Inventory
+Targeted Inventory Sync: Dynamically pull device status and inventory filtered by specific Site Tags using the API.
+
+2. Day 2 Operations & Provisioning
+Remote Operations: Trigger a device reboot via the API.
+Network Provisioning: Programmatically add a VLAN/sub-interface to an existing device port (includes resetting the parent port to default prior to provisioning).
+
+3. ZTP & Site Deployment Workflow
+Template Creation (UI): Build a new Site Template and device shell based on an existing branch.
+Site Spin-Up (UI): Deploy a new site and device shell from the template with manual data entry (omitting the serial number).
+Zero Touch Provisioning (API): Run the ZTP script to automatically assign and claim a physical device into the newly created site shell.
+
+4. Lifecycle Management & RMA
+Device Replacement: Execute a workflow to replace an existing device with a new online ION (e.g., 1200-S-C5G).
+
+5. Infrastructure as Code (Backup, Destroy, Restore)
+Configuration Backup: Export a full backup of resources, policies, and sites to YAML files.
+Site Teardown: Programmatically decommission and destroy a site via the API.
+Site Rebuild: Automatically rebuild/put the site and device back into production using the previously exported code.
+Policy Recovery: Simulate a misconfiguration (deleting a QoS policy stack in the UI) and instantly restore it using the YAML backup script.
