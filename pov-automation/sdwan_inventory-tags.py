@@ -115,7 +115,7 @@ def main():
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
-        "x-panw-region": "americas"
+        "x-panw-region": "de"
     }
     
     # 1. Initialize Profile
@@ -190,7 +190,7 @@ def main():
             val = stat.get(field)
             return "Connected" if val is True else "Disconnected" if val is False else "N/A"
 
-        app_sig = stat.get('application_sig_file_info', {})
+        app_sig = stat.get('application_sig_file_info') or {}
         switch = stat.get('switch_state', {})
 
         row = {
