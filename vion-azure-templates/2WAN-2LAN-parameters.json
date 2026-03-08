@@ -1,0 +1,39 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": { "value": "westeurope" },
+        "publicIPAddressName": { "value": "vIon-publicIP-1" },
+        "publicIPNewOrExisting": { "value": "new" },
+        "publicIPRGName": { "value": "VFRANCA_SDWAN_EU" },
+        "vmSize": { "value": "Standard_D8s_v3" },
+        "imageVersion": { "value": "latest" },
+        "srcIPInboundNSG": { "value": "0.0.0.0/0" },
+        "virtualNetworkName": { "value": "transitVNET-42" },
+        "virtualNetworkExistingRGName": { "value": "VFRANCA_SDWAN_EU" },
+        "virtualNetworkAddressPrefixes": { "value": [ "172.17.0.0/16" ] },
+        "vnetNewOrExisting": { "value": "new" },
+        "subnet0Name": { "value": "Controller" },
+        "subnet1Name": { "value": "Internet-1" },
+        "subnet2Name": { "value": "LAN" },
+        "subnet3Name": { "value": "Internet-2" },
+        "subnet0Prefix": { "value": "172.17.0.0/24" },
+        "subnet1Prefix": { "value": "172.17.1.0/24" },
+        "subnet2Prefix": { "value": "172.17.2.0/24" },
+        "subnet3Prefix": { "value": "172.17.3.0/24" },
+        "intPortPrivateIP": { "value": "172.17.1.4" },
+        "intPortGateway": { "value": "172.17.1.1" },
+        "intPortDns": { "value": "8.8.8.8" },
+        "bootstrap": { "value": "yes" },
+        "licenseKey": {
+            "value": "your_key"
+        },
+        "secretKey": {
+            "value": "your_secret"
+        },
+        "adminPass": {
+            "value": "your_password"
+        },
+        "zone": { "value": "None" }
+    }
+}
