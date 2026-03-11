@@ -4,6 +4,12 @@
 # Disclaimer: Personal project by a Palo Alto Networks employee.
 # Not an official PANW product. No support/warranty. See DISCLAIMER.md.
 
+
+# credentials should be added to a vault:
+#pip install keyring
+#python3 -c "import keyring; keyring.set_password('prismasase', 'client_id', 'YOUR_SA_ID')"
+#python3 -c "import keyring; keyring.set_password('prismasase', 'client_secret', 'YOUR_SECRET')"
+#python3 -c "import keyring; keyring.set_password('prismasase', 'tsg_id', 'YOUR_TSG_ID')"
 #usage: python3 scm_sdwan_bind_localSecPrefix.py -o "local security prefix list name"
 
 import requests
