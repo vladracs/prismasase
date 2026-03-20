@@ -1,3 +1,9 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Vladimir F de Sousa - vfrancad@gmail.com
+# Disclaimer: Personal project by a Palo Alto Networks employee.
+# Not an official PANW product. No support/warranty. See DISCLAIMER.md.
+
 #Use: 
 # python3 -c "import keyring; keyring.set_password('prismasase', 'client_id', 'YOUR_SA_ID')"
 # python3 -c "import keyring; keyring.set_password('prismasase', 'client_secret', 'YOUR_SECRET')"
