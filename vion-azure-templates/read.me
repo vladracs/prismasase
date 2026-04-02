@@ -1,1 +1,30 @@
+Deploy a Palo Alto Networks Prisma SD-WAN (CloudGenix) vION appliance, provided the surrounding Azure environment constraints are met.
+Meant for a LAB environment - not an approved designed by Palo Alto Networks
 
+The logic handling conditionals (new vs. existing VNets and Public IPs) and the string manipulation for custom data (like extracting the CIDR prefix for nic1PrefixLen) are handled perfectly.
+
+However, before deploy it in a production environment, there are a few architectural and deployment edge cases you should be aware of:
+
+Critical Deployment Considerations
+Marketplace Terms Acceptance: Because this template pulls an image from the Azure Marketplace (paloaltonetworks prisma-sd-wan-ion-virtual-appliance), the Azure subscription running this deployment must have accepted the programmatic deployment terms for this specific image beforehand. If you haven't accepted the EULA, the deployment will immediately fail. You can accept these via Azure CLI or Azure PowerShell prior to deploying.
+
+Hardcoded Public IP Name: The second public IP resource is hardcoded with the name "extraNicPublicIP".
+
+The Risk: If you deploy this template twice in the same Resource Group to create two vION appliances, the second deployment will overwrite and "steal" this public IP from the first VM's nic3.
+
+The Fix: Parameterize this name or use a unique string variable, like "[concat('extraNicPublicIP-', uniqueString(resourceGroup().id))]" or "[concat(variables('vmName'), '-extrapubip')]" to ensure it scales.
+
+Architectural Observations & Best Practices
+Availability Zones vs. Availability Sets: Your template includes parameters for both zone and availabilitySetName. In Azure, a single VM cannot be associated with both an Availability Zone and an Availability Set. While your template defaults both to "None" (which works fine), if a user overrides both defaults during deployment, Azure will reject the request with a BadRequest.
+
+Existing VNet NSG Caveat: If vnetNewOrExisting is set to "existing", the template skips VNet creation (which is correct). However, this also means the template does not attach the DefaultIONNSG (allowing UDP 500 and 4500) to the existing subnets. You will need to ensure those rules are manually applied to the target subnets in your existing VNet, or traffic to nic1 and nic3 will be blocked.
+
+NIC Quota on VM Size: You are attaching 4 Network Interfaces (nic0 through nic3). The specified VM size is Standard_D8s_v3, which supports up to 4 NICs. This aligns perfectly, but if you ever parameterize vmSize to allow smaller instances (like Standard_D2s_v3, which only supports 2 NICs), the deployment will fail.
+
+OS Disk Storage Type: You omitted the managedDisk > storageAccountType property in the osDisk block. Because you are using an "s" variant VM (D8s_v3), Azure supports Premium SSDs. By omitting the type, it will fall back to standard Azure defaults. If you require premium performance for the OS disk, explicitly define it:
+
+JSON
+"osDisk": { 
+    "createOption": "FromImage",
+    "managedDisk": { "storageAccountType": "Premium_LRS" }
+}
