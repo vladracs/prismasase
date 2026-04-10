@@ -29,13 +29,19 @@ def append_to_target_tenant():
         return
 
     # 2. Extract prefixes (Excluding 0.0.0.0/0)
+    # 2. Extract prefixes safely from either format
     new_prefixes_from_json = []
     for element in source_data.get("elements", []):
         for peer in element.get("peers", []):
-            for p in peer.get("prefixes_private", []) + peer.get("prefixes_public", []):
-                if p != "0.0.0.0/0":
+            # This looks for all 3 possible keys
+            raw_list = peer.get("prefixes", []) + \
+                       peer.get("prefixes_private", []) + \
+                       peer.get("prefixes_public", [])
+            
+            for p in raw_list:
+                # Still vital to filter the default route
+                if p and p != "0.0.0.0/0":
                     new_prefixes_from_json.append(p)
-
     if not new_prefixes_from_json:
         print("❌ No valid prefixes found in JSON.")
         return
