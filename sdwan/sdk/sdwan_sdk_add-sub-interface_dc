@@ -1,0 +1,186 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Vladimir F de Sousa - vfrancad@gmail.com
+# Disclaimer: Personal project by a Palo Alto Networks employee.
+# Not an official PANW product. No support/warranty. See DISCLAIMER.md.
+
+import prisma_sase
+import keyring
+import sys
+import argparse
+import json
+
+SERVICE_NAME = "prismasase"
+
+def find_obj(items, name, label):
+    """Returns the full dictionary object for a given name."""
+    target = str(name).strip().lower()
+    for item in items:
+        # Check both name and display_name for robust matching
+        item_name = str(item.get('name') or item.get('display_name') or '').lower()
+        if item_name == target:
+            return item
+    
+    print(f"❌ Error: Could not find {label} named '{name}'")
+    sys.exit(1)
+
+def main():
+    parser = argparse.ArgumentParser(description="Create Sub-interface using SDK with VRF Mapping")
+    parser.add_argument("-S", "--site", required=True, help="Site Name")
+    parser.add_argument("-D", "--device", required=True, help="Device Name")
+    parser.add_argument("-I", "--interface", required=True, help="Parent Interface (e.g. '5' or 'Ethernet 5')")
+    parser.add_argument("--vlan", required=True, help="VLAN ID")
+    parser.add_argument("--ip", required=True, help="IP/CIDR (e.g. 10.10.10.1/24)")
+    parser.add_argument("--vrf", required=True, help="VRF Name")
+    parser.add_argument("--desc", help="Optional description")
+    args = parser.parse_args()
+
+    # 1. Auth & SDK Init
+    cid = keyring.get_password(SERVICE_NAME, "client_id")
+    sec = keyring.get_password(SERVICE_NAME, "client_secret")
+    tsg = keyring.get_password(SERVICE_NAME, "tsg_id")
+
+    if not all([cid, sec, tsg]):
+        print(f"❌ Missing credentials in keyring for '{SERVICE_NAME}'")
+        sys.exit(1)
+
+    sdk = prisma_sase.API(controller="https://api.sase.paloaltonetworks.com")
+    sdk._session.headers.update({"X-PANW-Automation": "vfrancad-subint-v1"})
+    
+    if not sdk.interactive.login_secret(cid, sec, tsg):
+        print("❌ Login failed. Check your credentials.")
+        sys.exit(1)
+
+    # 2. Resolve IDs & Objects
+    print(f"🔎 Looking up resources for Site '{args.site}'...")
+    
+    # Site
+    sites = sdk.get.sites().cgx_content.get("items", [])
+    site_obj = find_obj(sites, args.site, "Site")
+    site_id = site_obj.get("id")
+    vrf_profile_id = site_obj.get("vrf_context_profile_id")
+
+    # Element (Device)
+    all_elements = sdk.get.elements().cgx_content.get("items", [])
+    site_elements = [e for e in all_elements if e.get('site_id') == site_id]
+    element_id = find_obj(site_elements, args.device, "Device").get("id")
+
+    # VRF Global
+    vrfs = sdk.get.vrfcontexts().cgx_content.get("items", [])
+    vrf_id = find_obj(vrfs, args.vrf, "VRF").get("id")
+
+    # Parent Interface
+    interfaces = sdk.get.interfaces(site_id=site_id, element_id=element_id).cgx_content.get("items", [])
+    parent_id = find_obj(interfaces, args.interface, "Interface").get("id")
+
+
+    # 3. [NEW] Validate & Update Site VRF Context Profile
+    if vrf_profile_id:
+        print(f"🔎 Checking VRF Profile mapping for '{args.vrf}'...")
+        profile_resp = sdk.get.vrfcontextprofiles(vrfcontextprofile_id=vrf_profile_id)
+        
+        if profile_resp.cgx_status:
+            profile_data = profile_resp.cgx_content
+            mapped_vrfs = profile_data.get("vrf_context_ids", [])
+            
+            if vrf_id not in mapped_vrfs:
+                print(f"⚠️ VRF '{args.vrf}' not assigned to Site profile. Updating profile...")
+                mapped_vrfs.append(vrf_id)
+                profile_data["vrf_context_ids"] = mapped_vrfs
+                
+                # Push the update
+                update_resp = sdk.put.vrfcontextprofiles(vrfcontextprofile_id=vrf_profile_id, data=profile_data)
+                if update_resp.cgx_status:
+                    print("✅ Successfully added VRF to Site VRF Context Profile.")
+                else:
+                    print(f"❌ Failed to update VRF Context Profile: {update_resp.cgx_content}")
+                    sys.exit(1)
+            else:
+                print(f"✅ VRF '{args.vrf}' is already mapped to the Site.")
+        else:
+            print(f"⚠️ Failed to pull VRF Context Profile {vrf_profile_id}. Proceeding anyway...")
+    else:
+        print(f"⚠️ Site '{args.site}' has no VRF Context Profile assigned. Proceeding anyway...")
+
+
+    # 4. Build Interface Payload (The strict Prisma schema)
+    # 4. Build Interface Payload (Datacenter / Private VRF Schema)
+    description = args.desc if args.desc else f"VLAN {args.vlan} - {args.vrf}"
+    payload = {
+        "parent": parent_id,
+        "type": "subinterface",
+        "used_for": "private",   # <--- Updated for Datacenter
+        "power_usage_threshold": 0,
+        "mtu": 0,  
+        "name": "", 
+        "description": description,
+        "attached_lan_networks": None,
+        "site_wan_interface_ids": None,
+        "mac_address": None,
+        "ipv4_config": {
+            "dhcp_config": None,
+            "type": "static",
+            "routes": None,
+            "dns_v4_config": {
+                "name_servers": []
+            },
+            "static_config": {
+                "address": args.ip
+            }
+        },
+        "ipv6_config": None,
+        "dhcp_relay": None,
+        "ethernet_port": {
+            "full_duplex": False,
+            "speed": 0
+        },
+        "admin_up": True,        # Python boolean True
+        "nat_address": None,
+        "nat_port": None,
+        "nat_address_v6": None,
+        "nat_port_v6": 0,
+        "bound_interfaces": None,
+        "sub_interface": {
+            "vlan_id": str(args.vlan), # From your snippet, it accepted string "10"
+            "native_vlan": None        # Changed from False to None
+        },
+        "pppoe_config": None,
+        "network_context_id": None,
+        "bypass_pair": None,
+        "peer_bypasspair_wan_port_type": "none",
+        "port_channel_config": None,
+        "service_link_config": None,
+        "sgi_apply_static_tag": None,
+        "scope": "local",        # <--- Updated to local scope
+        "tags": None,
+        "nat_zone_id": None,
+        "devicemgmt_policysetstack_id": None,
+        "nat_pools": None,
+        "directed_broadcast": False,
+        "ipfixcollectorcontext_id": None,
+        "ipfixfiltercontext_id": None,
+        "secondary_ip_configs": None,
+        "static_arp_configs": None,
+        "cellular_config": None,
+        "multicast_config": None,
+        "poe_enabled": False,
+        "lldp_enabled": None,
+        "switch_port_config": None,
+        "authentication_config": None,
+        "vlan_config": None,
+        "interface_profile_id": None,
+        "vrf_context_id": vrf_id,
+        "fec_mode": None,
+        "loopback_config": None
+    }
+    # 5. Push Sub-interface Config
+    print(f"🚀 Creating Sub-interface {args.interface}.{args.vlan} (VRF: {args.vrf})...")
+    resp = sdk.post.interfaces(site_id=site_id, element_id=element_id, data=payload)
+
+    if resp.cgx_status:
+        print(f"✅ Success! Created Interface ID: {resp.cgx_content.get('id')}")
+    else:
+        print(f"❌ Failed: {json.dumps(resp.cgx_content, indent=2)}")
+
+if __name__ == "__main__":
+    main()
