@@ -2,27 +2,78 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
-        "location": { "type": "string" },
-        "networkInterfaceName1": { "type": "string" },
-        "networkInterfaceName2": { "type": "string", "defaultValue": "wan2" },
-        "networkSecurityGroupName": { "type": "string" },
-        "networkSecurityGroupRules": { "type": "array" },
-        "subnetId": { "type": "string" },
-        "publicIpAddressName1": { "type": "string" },
-        "publicIpAddressName2": { "type": "string", "defaultValue": "wan2-ip" },
-        "publicIpAddressType": { "type": "string" },
-        "publicIpAddressSku": { "type": "string" },
-        "pipDeleteOption": { "type": "string" },
-        "virtualMachineName": { "type": "string" },
-        "virtualMachineComputerName1": { "type": "string" },
-        "osDiskType": { "type": "string" },
-        "osDiskDeleteOption": { "type": "string" },
-        "virtualMachineSize": { "type": "string" },
-        "nicDeleteOption": { "type": "string" },
-        "adminUsername": { "type": "string" },
-        "adminPassword": { "type": "secureString" },
-        "enablePeriodicAssessment": { "type": "string" },
-        "virtualMachine1Zone": { "type": "array", "defaultValue": ["1"] }
+        "location": { 
+            "type": "string", 
+            "defaultValue": "westeurope" 
+        },
+        "publicIPAddressName": { 
+            "type": "string", 
+            "defaultValue": "vIon-publicIP-1" 
+        },
+        "publicIPNewOrExisting": { 
+            "type": "string", 
+            "defaultValue": "new" 
+        },
+        "publicIPRGName": { 
+            "type": "string", 
+            "defaultValue": "VFRANCA_SDWAN_EU" 
+        },
+        "vmSize": { 
+            "type": "string", 
+            "defaultValue": "Standard_D8s_v3" 
+        },
+        "imageVersion": { 
+            "type": "string", 
+            "defaultValue": "latest" 
+        },
+        "srcIPInboundNSG": { 
+            "type": "string", 
+            "defaultValue": "0.0.0.0/0" 
+        },
+        "virtualNetworkName": { 
+            "type": "string", 
+            "defaultValue": "transitVNET-42" 
+        },
+        "virtualNetworkExistingRGName": { 
+            "type": "string", 
+            "defaultValue": "VFRANCA_SDWAN_EU" 
+        },
+        "virtualNetworkAddressPrefixes": { 
+            "type": "array", 
+            "defaultValue": [ "172.17.0.0/16" ] 
+        },
+        "vnetNewOrExisting": { 
+            "type": "string", 
+            "defaultValue": "new" 
+        },
+        "subnet0Name": { "type": "string", "defaultValue": "Controller" },
+        "subnet1Name": { "type": "string", "defaultValue": "Internet-1" },
+        "subnet2Name": { "type": "string", "defaultValue": "LAN" },
+        "subnet3Name": { "type": "string", "defaultValue": "Internet-2" },
+        "subnet0Prefix": { "type": "string", "defaultValue": "172.17.0.0/24" },
+        "subnet1Prefix": { "type": "string", "defaultValue": "172.17.1.0/24" },
+        "subnet2Prefix": { "type": "string", "defaultValue": "172.17.2.0/24" },
+        "subnet3Prefix": { "type": "string", "defaultValue": "172.17.3.0/24" },
+        "intPortPrivateIP": { "type": "string", "defaultValue": "172.17.1.4" },
+        "intPortGateway": { "type": "string", "defaultValue": "172.17.1.1" },
+        "intPortDns": { "type": "string", "defaultValue": "8.8.8.8" },
+        "bootstrap": { "type": "string", "defaultValue": "yes" },
+        "licenseKey": { 
+            "type": "secureString", 
+            "defaultValue": "REPLACE_WITH_YOUR_KEY" 
+        },
+        "secretKey": { 
+            "type": "secureString", 
+            "defaultValue": "REPLACE_WITH_YOUR_SECRET" 
+        },
+        "adminPass": { 
+            "type": "secureString", 
+            "defaultValue": "REPLACE_WITH_YOUR_PASSWORD" 
+        },
+        "zone": { 
+            "type": "string", 
+            "defaultValue": "None" 
+        }
     },
     "variables": {
         "nsgId": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('networkSecurityGroupName'))]"
@@ -193,4 +244,5 @@
             "zones": "[parameters('virtualMachine1Zone')]"
         }
     ]
+
 }
