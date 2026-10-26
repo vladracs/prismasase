@@ -47,7 +47,7 @@ def main():
                 else:
                     final_path = raw_path
 
-                cmd = f"python3 push_policy_refactored_original-gemini.py -PT {p} -F '{final_path}'"
+                cmd = f"python3 push_policy.py -PT {p} -F '{final_path}'"
                 run_cmd(f"Policy: {p}", cmd, "02_policy_scripts")
 
     if args.site:
