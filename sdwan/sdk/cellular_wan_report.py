@@ -25,15 +25,31 @@
 # trademarks of Palo Alto Networks. Other names may be trademarks of their
 # respective owners. No affiliation or endorsement is implied.
 # ============================================================================
-import csv
-import sys
-import prisma_sase
+"""
+Site Cellular Report.
 
-def extract_active_fw(firmware_list):
-    """
-    Parses the firmware array and returns the fw_version 
-    where 'active' is set to True.
-    """
+Iterates over all sites and devices, checking for cellular modules, 
+and reporting their status.
+"""
+from __future__ import annotations
+import argparse
+import sys
+import csv
+from typing import Any
+
+import prisma_sase
+from _readonly_guard import enforce_readonly
+
+def login() -> prisma_sase.API:
+    return sdk
+
+def _items(resp) -> list:
+    if not resp.cgx_status:
+        return []
+    return (resp.cgx_content or {}).get("items") or []
+
+def extract_active_fw(firmware_list: list[dict[str, Any]]) -> str:
+    """Parses the firmware array and returns the fw_version where 'active' is True."""
     if not isinstance(firmware_list, list):
         return "Unknown"
     for fw in firmware_list:
@@ -42,100 +58,95 @@ def extract_active_fw(firmware_list):
     return "Unknown"
 
 def main():
-    # Initialize the Prisma SASE SDK
-    sase_session = prisma_sase.API()
+    ap = argparse.ArgumentParser(description="Per-site Cellular device report.")
+    ap.add_argument("--site", help="Filter to a single site by exact name (case-insensitive).")
+    ap.add_argument("--csv", help="Output to CSV file instead of stdout", type=str)
+    args = ap.parse_args()
+
+    global sdk
+    sdk = prisma_sase.API()
+    sdk.interactive.login_interactive()
     
-    # Prompt for credentials/token
-    print("Authenticating to Prisma SASE...")
-    sase_session.interactive.login_interactive()
+    # --- fetch shared tables once ---
+    sites       = _items(sdk.get.sites())
+    elements    = _items(sdk.get.elements())
     
-    print("Fetching Sites...")
-    sites_resp = sase_session.get.sites()
-    if not sites_resp.cgx_status:
-        print("Error fetching sites. Check your permissions.")
-        sys.exit(1)
-        
-    # Map site IDs to site Names for the report
-    sites_map = {site["id"]: site["name"] for site in sites_resp.cgx_content.get("items", [])}
-    
-    print("Fetching Elements...")
-    elements_resp = sase_session.get.elements()
-    if not elements_resp.cgx_status:
-        print("Error fetching elements.")
-        sys.exit(1)
-        
-    elements = elements_resp.cgx_content.get("items", [])
-    report_data = []
-    
-    print("Scanning elements for Cellular Modules... (this may take a moment)")
-    for element in elements:
-        site_id = element.get("site_id")
-        
-        # Skip unassigned elements (devices not placed in a site)
-        if not site_id:
-            continue 
+    # site filter
+    if args.site:
+        sites = [s for s in sites if (s.get("name") or "").lower() == args.site.lower()]
+        if not sites:
+            print(f"ERROR: no site named '{args.site}'")
+            sys.exit(2)
             
-        element_id = element.get("id")
-        element_name = element.get("name")
-        site_name = sites_map.get(site_id, "Unknown Site")
-        
-        # Query cellular modules for this specific element
-        cell_modules_uri = f"/sdwan/v2.1/api/elements/{element_id}/cellular_modules"
-        cell_resp = sase_session.rest_call(method="GET", uri=cell_modules_uri)
-        
-        # If the element has cellular modules, loop through them
-        if cell_resp.cgx_status and "items" in cell_resp.cgx_content:
-            for module in cell_resp.cgx_content["items"]:
-                module_id = module.get("id")
-                
-                # Fetch the detailed status using the endpoint you provided
-                status_uri = f"/sdwan/v2.1/api/elements/{element_id}/cellular_modules/{module_id}/status"
-                status_resp = sase_session.rest_call(method="GET", uri=status_uri)
-                
-                if status_resp.cgx_status:
-                    status = status_resp.cgx_content
-                    
-                    # Parse nested dictionaries safely
-                    net_state = status.get("network_state", {})
-                    freq_band = net_state.get("frequency_band", "")
-                    
-                    # Parse out the currently active firmware
-                    active_fw = extract_active_fw(status.get("firmware", []))
-                    
-                    # Append flat data to our report
-                    report_data.append({
-                        "Site Name": site_name,
-                        "Element Name": element_name,
-                        "Model Name": status.get("model_name"),
-                        "Manufacturer": status.get("manufacturer"),
-                        "IMEI": status.get("imei"),
-                        "Serial Number": status.get("serial_number"),
-                        "Modem State": status.get("modem_state"),
-                        "Carrier": status.get("carrier"),
-                        "Active SIM": status.get("active_sim"),
-                        "Signal Strength": status.get("signal_strength_indicator"),
-                        "Network Reg State": status.get("network_registration_state"),
-                        "Packet Service State": status.get("packet_service_state"),
-                        "Activation State": status.get("activation_state"),
-                        "Frequency Band": freq_band,
-                        "Active FW Version": active_fw
-                    })
-                    
-    if not report_data:
-        print("No cellular modules found across any sites.")
-        return
-        
-    # Write the collected data out to a CSV
-    csv_filename = "cellular_modules_report.csv"
-    headers = report_data[0].keys()
+    sites_by_id = {s["id"]: s for s in sites}
     
-    with open(csv_filename, "w", newline="") as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=headers)
-        writer.writeheader()
-        writer.writerows(report_data)
+    report_data = []
+
+    print("Scanning elements for Cellular Modules...", file=sys.stderr)
+    
+    for e in elements:
+        site_id = e.get("site_id")
+        if not site_id or site_id not in sites_by_id:
+            continue
+            
+        site_name = sites_by_id[site_id].get("name") or "(unnamed)"
+        element_id = e.get("id")
+        element_name = e.get("name") or "(unnamed)"
         
-    print(f"\nSuccess! Found {len(report_data)} cellular modules.")
-    print(f"Report saved locally to: {csv_filename}")
+        # Check cellular modules
+        cell_resp = sdk.rest_call(method="GET", uri=f"/sdwan/v2.1/api/elements/{element_id}/cellular_modules")
+        modules = _items(cell_resp)
+        
+        for module in modules:
+            module_id = module.get("id")
+            
+            # Fetch detailed status
+            status_resp = sdk.rest_call(method="GET", uri=f"/sdwan/v2.1/api/elements/{element_id}/cellular_modules/{module_id}/status")
+            
+            if status_resp.cgx_status:
+                status = status_resp.cgx_content or {}
+                net_state = status.get("network_state") or {}
+                active_fw = extract_active_fw(status.get("firmware") or [])
+                
+                report_data.append({
+                    "Site": site_name,
+                    "Element": element_name,
+                    "Model": status.get("model_name", "-"),
+                    "Manufacturer": status.get("manufacturer", "-"),
+                    "IMEI": status.get("imei", "-"),
+                    "Serial": status.get("serial_number", "-"),
+                    "State": status.get("modem_state", "-"),
+                    "Carrier": status.get("carrier", "-"),
+                    "Signal": status.get("signal_strength_indicator", "-"),
+                    "Network Reg": status.get("network_registration_state", "-"),
+                    "Freq Band": net_state.get("frequency_band", "-"),
+                    "FW Version": active_fw
+                })
+                
+    if not report_data:
+        print("No cellular modules found.", file=sys.stderr)
+        return
+
+    if args.csv:
+        with open(args.csv, 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=report_data[0].keys())
+            writer.writeheader()
+            writer.writerows(report_data)
+        print(f"Report saved to {args.csv}", file=sys.stderr)
+    else:
+        # Print to stdout
+        fmt = "{site:<20} {element:<20} {state:<10} {signal:<10} {carrier:<15} {fw:<15}"
+        print(fmt.format(site="SITE", element="ELEMENT", state="STATE", signal="SIGNAL", carrier="CARRIER", fw="FW VERSION"))
+        print("-" * 95)
+        for row in report_data:
+            print(fmt.format(
+                site=row["Site"][:19],
+                element=row["Element"][:19],
+                state=row["State"],
+                signal=row["Signal"],
+                carrier=row["Carrier"],
+                fw=row["FW Version"]
+            ))
 
 if __name__ == "__main__":
     main()
